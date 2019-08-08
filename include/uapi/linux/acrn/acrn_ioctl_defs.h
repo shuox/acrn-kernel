@@ -216,6 +216,19 @@ struct vm_memmap {
 	uint32_t prot;	/* RWX */
 };
 
+/**
+ * @brief Info to inject a MSI interrupt to VM
+ *
+ * the parameter for HC_INJECT_MSI hypercall
+ */
+struct acrn_msi_entry {
+	/** MSI addr[19:12] with dest VCPU ID */
+	uint64_t msi_addr;
+
+	/** MSI data[7:0] with vector */
+	uint64_t msi_data;
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -236,6 +249,11 @@ struct vm_memmap {
 #define IC_RESET_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x05)
 #define IC_SET_VCPU_REGS               _IC_ID(IC_ID, IC_ID_VM_BASE + 0x06)
 
+/* IRQ and Interrupts */
+#define IC_ID_IRQ_BASE                 0x20UL
+#define IC_INJECT_MSI                  _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x03)
+#define IC_VM_INTR_MONITOR             _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x04)
+#define IC_SET_IRQLINE                 _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x05)
 
 /* Guest memory management */
 #define IC_ID_MEM_BASE                  0x40UL

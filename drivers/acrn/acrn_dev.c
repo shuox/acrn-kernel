@@ -13,6 +13,7 @@
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/io.h>
+#include <linux/mm.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/init.h>
@@ -288,6 +289,58 @@ long acrn_dev_ioctl(struct file *filep,
 			pr_err("acrn: failed to reset intr info for ptdev!\n");
 			return -EFAULT;
 		}
+		break;
+	}
+
+	case IC_SET_IRQLINE: {
+		ret = hcall_set_irqline(vm->vmid, ioctl_param);
+		if (ret < 0) {
+			pr_err("acrn: failed to set irqline!\n");
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_INJECT_MSI: {
+		struct acrn_msi_entry *msi;
+
+		msi = kmalloc(sizeof(*msi), GFP_KERNEL);
+		if (!msi)
+			return -ENOMEM;
+
+		if (copy_from_user(msi, (void __user *)ioctl_param,
+				   sizeof(*msi))) {
+			kfree(msi);
+			return -EFAULT;
+		}
+
+		ret = hcall_inject_msi(vm->vmid, virt_to_phys(msi));
+		kfree(msi);
+		if (ret < 0) {
+			pr_err("acrn: failed to inject!\n");
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_VM_INTR_MONITOR: {
+		struct page *page;
+
+		ret = get_user_pages_fast(ioctl_param, 1, 1, &page);
+		if (unlikely(ret != 1)) {
+			pr_err("acrn-dev: failed to pin intr hdr buffer!\n");
+			return -ENOMEM;
+		}
+
+		ret = hcall_vm_intr_monitor(vm->vmid, page_to_phys(page));
+		if (ret < 0) {
+			put_page(page);
+			pr_err("acrn-dev: monitor intr data err=%ld\n", ret);
+			return -EFAULT;
+		}
+		if (vm->monitor_page)
+			put_page(vm->monitor_page);
+		vm->monitor_page = page;
 		break;
 	}
 

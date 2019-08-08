@@ -87,6 +87,7 @@ void vm_list_add(struct list_head *list);
  * @max_gfn: maximum guest page frame number
  * @vcpu_num: vcpu number
  * @flags: VM flag bits
+ * @monitor_page: the page for monitor interrupt
  * @hugepage_hlist: hash list of hugepage
  */
 struct acrn_vm {
@@ -97,6 +98,7 @@ struct acrn_vm {
 	int max_gfn;
 	atomic_t vcpu_num;
 	unsigned long flags;
+	struct page *monitor_page;
 	/* mutex to protect hugepage_hlist */
 	struct mutex hugepage_lock;
 	struct hlist_head hugepage_hlist[HUGEPAGE_HLIST_ARRAY_SIZE];

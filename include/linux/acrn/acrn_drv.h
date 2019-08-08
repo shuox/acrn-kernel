@@ -84,4 +84,16 @@ extern int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
 extern int acrn_write_protect_page(unsigned short vmid, unsigned long gpa,
 				   unsigned char set);
 
+/**
+ * acrn_inject_msi() - inject MSI interrupt to guest
+ *
+ * @vmid: guest vmid
+ * @msi_addr: MSI addr matches MSI spec
+ * @msi_data: MSI data matches MSI spec
+ *
+ * Return: 0 on success, <0 on error
+ */
+extern int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
+			   unsigned long msi_data);
+
 #endif

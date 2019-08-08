@@ -11,8 +11,11 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/init.h>
+#include <linux/io.h>
+#include <linux/mm.h>
 #include <linux/rwlock_types.h>
 #include <linux/acrn/acrn_ioctl_defs.h>
+#include <linux/acrn/acrn_drv.h>
 
 #include "acrn_hypercall.h"
 #include "acrn_drv_internal.h"
@@ -45,6 +48,10 @@ void put_vm(struct acrn_vm *vm)
 {
 	if (refcount_dec_and_test(&vm->refcnt)) {
 		free_guest_mem(vm);
+		if (vm->monitor_page) {
+			put_page(vm->monitor_page);
+			vm->monitor_page = NULL;
+		}
 		kfree(vm);
 		pr_debug("hsm: freed vm\n");
 	}
@@ -68,7 +75,32 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 		clear_bit(ACRN_VM_DESTROYED, &vm->flags);
 		return -EFAULT;
 	}
-
 	vm->vmid = ACRN_INVALID_VMID;
 	return 0;
 }
+
+int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
+		    unsigned long msi_data)
+{
+	struct acrn_msi_entry *msi;
+	int ret;
+
+	msi = kzalloc(sizeof(*msi), GFP_KERNEL);
+
+	if (!msi)
+		return -ENOMEM;
+
+	/* msi_addr: addr[19:12] with dest vcpu id */
+	/* msi_data: data[7:0] with vector */
+	msi->msi_addr = msi_addr;
+	msi->msi_data = msi_data;
+	ret = hcall_inject_msi(vmid, virt_to_phys(msi));
+	kfree(msi);
+	if (ret < 0) {
+		pr_err("acrn: failed to inject MSI for vmid %d, msi_addr %lx msi_data%lx!\n",
+		       vmid, msi_addr, msi_data);
+		return -EFAULT;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(acrn_inject_msi);
