@@ -25,6 +25,7 @@
 #include <linux/acrn/acrn_ioctl_defs.h>
 
 #include "acrn_hypercall.h"
+#include "acrn_drv_internal.h"
 
 #define	DEVICE_NAME	"acrn_hsm"
 
@@ -33,6 +34,22 @@ static struct api_version acrn_api_version;
 static
 int acrn_dev_open(struct inode *inodep, struct file *filep)
 {
+	struct acrn_vm *vm;
+
+	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
+	if (!vm)
+		return -ENOMEM;
+
+	refcount_set(&vm->refcnt, 1);
+	vm->vmid = ACRN_INVALID_VMID;
+	vm->dev = acrn_device;
+
+	write_lock_bh(&acrn_vm_list_lock);
+	vm_list_add(&vm->list);
+	write_unlock_bh(&acrn_vm_list_lock);
+	filep->private_data = vm;
+
+	pr_info("%s: opening device node\n", __func__);
 	return 0;
 }
 
@@ -40,17 +57,120 @@ static
 long acrn_dev_ioctl(struct file *filep,
 		    unsigned int ioctl_num, unsigned long ioctl_param)
 {
+	struct acrn_vm *vm;
+
+	vm = (struct acrn_vm *)filep->private_data;
+	if (!vm) {
+		pr_err("acrn: invalid VM !\n");
+		return -EFAULT;
+	}
+ 
 	if (ioctl_num == IC_GET_API_VERSION) {
 		if (copy_to_user((void __user *)ioctl_param, &acrn_api_version,
 				 sizeof(acrn_api_version)))
 			return -EFAULT;
 	}
 
+	if ((vm->vmid == ACRN_INVALID_VMID) && (ioctl_num != IC_CREATE_VM)) {
+		pr_err("acrn: invalid VM ID for IOCTL %x!\n", ioctl_num);
+		return -EFAULT;
+	}
+
+	switch (ioctl_num) {
+	case IC_CREATE_VM: {
+		struct acrn_create_vm *created_vm;
+
+		created_vm = kmalloc(sizeof(*created_vm), GFP_KERNEL);
+		if (!created_vm)
+			return -ENOMEM;
+
+		if (copy_from_user(created_vm, (void __user *)ioctl_param,
+				   sizeof(struct acrn_create_vm))) {
+			kfree(created_vm);
+			return -EFAULT;
+		}
+
+		ret = hcall_create_vm(virt_to_phys(created_vm));
+		if ((ret < 0) || (created_vm->vmid == ACRN_INVALID_VMID)) {
+			pr_err("acrn: failed to create VM from Hypervisor !\n");
+			kfree(created_vm);
+			return -EFAULT;
+		}
+
+		if (copy_to_user((void __user *)ioctl_param, created_vm,
+				 sizeof(struct acrn_create_vm))) {
+			kfree(created_vm);
+			return -EFAULT;
+		}
+
+		vm->vmid = created_vm->vmid;
+		atomic_set(&vm->vcpu_num, 0);
+
+		pr_debug("acrn: VM %d created\n", created_vm->vmid);
+		kfree(created_vm);
+		break;
+	}
+
+	case IC_START_VM: {
+		ret = hcall_start_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: failed to start VM %d!\n", vm->vmid);
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_PAUSE_VM: {
+		ret = hcall_pause_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: failed to pause VM %d!\n", vm->vmid);
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_RESET_VM: {
+		ret = hcall_reset_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: failed to restart VM %d!\n", vm->vmid);
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_DESTROY_VM: {
+		ret = acrn_vm_destroy(vm);
+		break;
+	}
+
+	default:
+		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
+		ret = -EINVAL;
+		break;
+	}
+
+
 	return 0;
 }
 
 static int acrn_dev_release(struct inode *inodep, struct file *filep)
 {
+	struct acrn_vm *vm = filep->private_data;
+
+	if (!vm) {
+		pr_err("acrn: invalid VM !\n");
+		return -EFAULT;
+	}
+	if (vm->vmid != ACRN_INVALID_VMID)
+		acrn_vm_destroy(vm);
+
+	write_lock_bh(&acrn_vm_list_lock);
+	list_del_init(&vm->list);
+	write_unlock_bh(&acrn_vm_list_lock);
+
+	put_vm(vm);
+	filep->private_data = NULL;
+ 
 	return 0;
 }
 
