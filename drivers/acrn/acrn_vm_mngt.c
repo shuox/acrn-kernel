@@ -74,6 +74,7 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	if (test_and_set_bit(ACRN_VM_DESTROYED, &vm->flags))
 		return 0;
 
+	acrn_ioeventfd_deinit(vm->vmid);
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {
 		pr_warn("failed to destroy VM %d\n", vm->vmid);

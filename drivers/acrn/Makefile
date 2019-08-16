@@ -4,4 +4,5 @@ acrn-y := acrn_dev.o \
 	  acrn_vm_mngt.o \
 	  acrn_mm.o \
 	  acrn_mm_hugetlb.o \
-	  acrn_ioreq.o
+	  acrn_ioreq.o  \
+	  acrn_ioeventfd.o

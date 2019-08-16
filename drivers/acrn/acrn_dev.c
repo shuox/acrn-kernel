@@ -122,6 +122,7 @@ long acrn_dev_ioctl(struct file *filep,
 		if (ret < 0)
 			goto ioreq_buf_fail;
 
+		acrn_ioeventfd_init(vm->vmid);
 		pr_debug("acrn: VM %d created\n", created_vm->vmid);
 		kfree(created_vm);
 		break;
@@ -486,6 +487,16 @@ ioreq_buf_fail:
 
 		break;
 	}
+	case IC_EVENT_IOEVENTFD: {
+		struct acrn_ioeventfd args;
+
+		if (copy_from_user(&args, (void __user *)ioctl_param,
+				   sizeof(args)))
+			return -EFAULT;
+
+		ret = acrn_ioeventfd_config(vm->vmid, &args);
+		break;
+	}
 
 	default:
 		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
@@ -496,6 +507,7 @@ ioreq_buf_fail:
 
 	return 0;
 }
+
 
 static int acrn_dev_release(struct inode *inodep, struct file *filep)
 {

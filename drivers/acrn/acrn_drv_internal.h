@@ -151,4 +151,9 @@ void acrn_ioreq_driver_init(void);
 void acrn_ioreq_clear_request(struct acrn_vm *vm);
 int acrn_ioreq_distribute_request(struct acrn_vm *vm);
 
+/* ioeventfd APIs */
+int acrn_ioeventfd_init(unsigned short vmid);
+int acrn_ioeventfd_config(unsigned short vmid, struct acrn_ioeventfd *args);
+void acrn_ioeventfd_deinit(unsigned short vmid);
+
 #endif

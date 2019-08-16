@@ -273,6 +273,18 @@ enum pm_cmd_type {
 	PMCMD_GET_CX_DATA,
 };
 
+#define ACRN_IOEVENTFD_FLAG_PIO		0x01
+#define ACRN_IOEVENTFD_FLAG_DATAMATCH	0x02
+#define ACRN_IOEVENTFD_FLAG_DEASSIGN	0x04
+struct acrn_ioeventfd {
+	int32_t fd;
+	uint32_t flags;
+	uint64_t addr;
+	uint32_t len;
+	uint32_t reserved;
+	uint64_t data;
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -323,4 +335,9 @@ enum pm_cmd_type {
 /* Power management */
 #define IC_ID_PM_BASE                   0x60UL
 #define IC_PM_GET_CPU_STATE            _IC_ID(IC_ID, IC_ID_PM_BASE + 0x00)
+
+/* VHM eventfd */
+#define IC_ID_EVENT_BASE		0x70UL
+#define IC_EVENT_IOEVENTFD		_IC_ID(IC_ID, IC_ID_EVENT_BASE + 0x00)
+
 #endif /* __ACRN_IOCTL_DEFS_H__ */
