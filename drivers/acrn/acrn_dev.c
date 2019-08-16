@@ -21,6 +21,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
+#include <linux/interrupt.h>
 #include <asm/acrn.h>
 #include <asm/hypervisor.h>
 #include <linux/acrn/acrn_ioctl_defs.h>
@@ -32,6 +33,7 @@
 #define	DEVICE_NAME	"acrn_hsm"
 
 static struct api_version acrn_api_version;
+static struct tasklet_struct acrn_io_req_tasklet;
 
 static
 int acrn_dev_open(struct inode *inodep, struct file *filep)
@@ -396,6 +398,16 @@ ioreq_buf_fail:
 		break;
 	}
 	case IC_CLEAR_VM_IOREQ: {
+		/*
+		 * we need to flush the current pending ioreq dispatch
+		 * tasklet and finish it before clearing all ioreq of this VM.
+		 * With tasklet_kill, there still be a very rare race which
+		 * might lost one ioreq tasklet for other VMs. So arm one after
+		 * the clearing. It's harmless.
+		 */
+		tasklet_schedule(&acrn_io_req_tasklet);
+		tasklet_kill(&acrn_io_req_tasklet);
+		tasklet_schedule(&acrn_io_req_tasklet);
 		acrn_ioreq_clear_request(vm);
 		break;
 	}
@@ -431,6 +443,28 @@ static int acrn_dev_release(struct inode *inodep, struct file *filep)
 	return 0;
 }
 
+static void io_req_tasklet(unsigned long data)
+{
+	struct acrn_vm *vm;
+	/* This is already in tasklet. Use read_lock for list_lock */
+
+	read_lock(&acrn_vm_list_lock);
+	list_for_each_entry(vm, &acrn_vm_list, list) {
+		if (!vm || !vm->req_buf)
+			break;
+
+		get_vm(vm);
+		acrn_ioreq_distribute_request(vm);
+		put_vm(vm);
+	}
+	read_unlock(&acrn_vm_list_lock);
+}
+
+static void acrn_intr_handler(void)
+{
+	tasklet_schedule(&acrn_io_req_tasklet);
+}
+
 static const struct file_operations fops = {
 	.open = acrn_dev_open,
 	.release = acrn_dev_release,
@@ -449,6 +483,7 @@ static struct miscdevice acrn_dev = {
 static int __init acrn_init(void)
 {
 	int ret;
+	unsigned long flag;
 
 	if (x86_hyper_type != X86_HYPER_ACRN)
 		return -ENODEV;
@@ -480,6 +515,10 @@ static int __init acrn_init(void)
 		return ret;
 	}
 
+	tasklet_init(&acrn_io_req_tasklet, io_req_tasklet, 0);
+	local_irq_save(flag);
+	acrn_setup_intr_irq(acrn_intr_handler);
+	local_irq_restore(flag);
 	acrn_ioreq_driver_init();
 
 	return 0;
@@ -487,6 +526,8 @@ static int __init acrn_init(void)
 
 static void __exit acrn_exit(void)
 {
+	tasklet_kill(&acrn_io_req_tasklet);
+	acrn_remove_intr_irq();
 	misc_deregister(&acrn_dev);
 }
 
