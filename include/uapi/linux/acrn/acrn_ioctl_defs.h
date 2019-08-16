@@ -143,6 +143,46 @@ struct acrn_set_vcpu_regs {
 	struct acrn_vcpu_regs vcpu_regs;
 };
 
+/**
+ * struct ic_ptdev_irq - pass thru device irq data structure
+ */
+struct ic_ptdev_irq {
+#define IRQ_INTX 0
+#define IRQ_MSI 1
+#define IRQ_MSIX 2
+	/** @type: irq type */
+	uint32_t type;
+	/** @virt_bdf: virtual bdf description of pass thru device */
+	uint16_t virt_bdf;	/* IN: Device virtual BDF# */
+	/** @phys_bdf: physical bdf description of pass thru device */
+	uint16_t phys_bdf;	/* IN: Device physical BDF# */
+	/** union */
+	union {
+		/** struct intx - info of IOAPIC/PIC interrupt */
+		struct {
+			/** @virt_pin: virtual IOAPIC pin */
+			uint32_t virt_pin;
+			/** @phys_pin: physical IOAPIC pin */
+			uint32_t phys_pin;
+			/** @is_pic_pin: PIC pin */
+			uint32_t is_pic_pin;
+		} intx;
+
+		/** struct msix - info of MSI/MSIX interrupt */
+		struct {
+			/* Keep this filed on top of msix */
+			/** @vector_cnt: vector count of MSI/MSIX */
+			uint32_t vector_cnt;
+
+			/** @table_size: size of MSIX table(round up to 4K) */
+			uint32_t table_size;
+
+			/** @table_paddr: physical address of MSIX table */
+			uint64_t table_paddr;
+		} msix;
+	};
+};
+
 #define VM_MEMMAP_SYSMEM       0
 #define VM_MEMMAP_MMIO         1
 
@@ -201,5 +241,12 @@ struct vm_memmap {
 #define IC_ID_MEM_BASE                  0x40UL
 #define IC_SET_MEMSEG                   _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x01)
 #define IC_UNSET_MEMSEG                 _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x02)
+
+/* PCI assignment*/
+#define IC_ID_PCI_BASE                  0x50UL
+#define IC_ASSIGN_PTDEV                _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x00)
+#define IC_DEASSIGN_PTDEV              _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x01)
+#define IC_SET_PTDEV_INTR_INFO         _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x03)
+#define IC_RESET_PTDEV_INTR_INFO       _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x04)
 
 #endif /* __ACRN_IOCTL_DEFS_H__ */

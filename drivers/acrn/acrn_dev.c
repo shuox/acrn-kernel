@@ -220,6 +220,77 @@ long acrn_dev_ioctl(struct file *filep,
 		break;
 	}
 
+	case IC_ASSIGN_PTDEV: {
+		unsigned short bdf;
+
+		if (copy_from_user(&bdf, (void __user *)ioctl_param,
+				   sizeof(unsigned short)))
+			return -EFAULT;
+
+		ret = hcall_assign_ptdev(vm->vmid, bdf);
+		if (ret < 0) {
+			pr_err("acrn: failed to assign ptdev!\n");
+			return -EFAULT;
+		}
+		break;
+	}
+	case IC_DEASSIGN_PTDEV: {
+		unsigned short bdf;
+
+		if (copy_from_user(&bdf, (void __user *)ioctl_param,
+				   sizeof(unsigned short)))
+			return -EFAULT;
+
+		ret = hcall_deassign_ptdev(vm->vmid, bdf);
+		if (ret < 0) {
+			pr_err("acrn: failed to deassign ptdev!\n");
+			return -EFAULT;
+		}
+		break;
+	}
+
+	case IC_SET_PTDEV_INTR_INFO: {
+		struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
+
+		if (copy_from_user(&ic_pt_irq, (void __user *)ioctl_param,
+				   sizeof(ic_pt_irq)))
+			return -EFAULT;
+
+		hc_pt_irq = kmemdup(&ic_pt_irq, sizeof(ic_pt_irq), GFP_KERNEL);
+		if (IS_ERR_OR_NULL(hc_pt_irq))
+			return -ENOMEM;
+
+		ret = hcall_set_ptdev_intr_info(vm->vmid,
+						virt_to_phys(hc_pt_irq));
+		kfree(hc_pt_irq);
+		if (ret < 0) {
+			pr_err("acrn: failed to set intr info for ptdev!\n");
+			return -EFAULT;
+		}
+
+		break;
+	}
+	case IC_RESET_PTDEV_INTR_INFO: {
+		struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
+
+		if (copy_from_user(&ic_pt_irq, (void __user *)ioctl_param,
+				   sizeof(ic_pt_irq)))
+			return -EFAULT;
+
+		hc_pt_irq = kmemdup(&ic_pt_irq, sizeof(ic_pt_irq), GFP_KERNEL);
+		if (!hc_pt_irq)
+			return -ENOMEM;
+
+		ret = hcall_reset_ptdev_intr_info(vm->vmid,
+						  virt_to_phys(hc_pt_irq));
+		kfree(hc_pt_irq);
+		if (ret < 0) {
+			pr_err("acrn: failed to reset intr info for ptdev!\n");
+			return -EFAULT;
+		}
+		break;
+	}
+
 	default:
 		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
 		ret = -EINVAL;
