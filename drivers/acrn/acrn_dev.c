@@ -578,6 +578,42 @@ static struct miscdevice acrn_dev = {
 
 #define SUPPORT_HV_API_VERSION_MAJOR	1
 #define SUPPORT_HV_API_VERSION_MINOR	0
+
+static ssize_t
+offline_cpu_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	u64 cpu, lapicid;
+	int ret;
+
+	ret = kstrtoull(buf, 0, &cpu);
+	if (ret)
+		return ret;
+
+	if ((cpu < num_possible_cpus()) && cpu_possible(cpu)) {
+		lapicid = cpu_data(cpu).apicid;
+		pr_info("acrn: try to offline cpu %lld with lapicid %lld\n",
+				cpu, lapicid);
+		if (hcall_sos_offline_cpu(lapicid) < 0) {
+			pr_err("acrn: failed to offline cpu from Hypervisor!\n");
+			return -EINVAL;
+		}
+	}
+	return count;
+}
+
+static DEVICE_ATTR(offline_cpu, 00200, NULL, offline_cpu_store);
+
+static struct attribute *acrn_attrs[] = {
+	&dev_attr_offline_cpu.attr,
+	NULL
+};
+
+static struct attribute_group acrn_attr_group = {
+	.attrs = acrn_attrs,
+};
+
 static int __init acrn_init(void)
 {
 	int ret;
@@ -613,6 +649,12 @@ static int __init acrn_init(void)
 		return ret;
 	}
 
+	if (sysfs_create_group(&acrn_device->kobj, &acrn_attr_group)) {
+		pr_warn("acrn: sysfs create failed\n");
+		misc_deregister(&acrn_dev);
+		return -EINVAL;
+	}
+
 	tasklet_init(&acrn_io_req_tasklet, io_req_tasklet, 0);
 	local_irq_save(flag);
 	acrn_setup_intr_irq(acrn_intr_handler);
@@ -626,6 +668,7 @@ static void __exit acrn_exit(void)
 {
 	tasklet_kill(&acrn_io_req_tasklet);
 	acrn_remove_intr_irq();
+	sysfs_remove_group(&acrn_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 }
 
