@@ -24,6 +24,7 @@
 #include <asm/acrn.h>
 #include <asm/hypervisor.h>
 #include <linux/acrn/acrn_ioctl_defs.h>
+#include <linux/acrn/acrn_drv.h>
 
 #include "acrn_hypercall.h"
 #include "acrn_drv_internal.h"
@@ -49,6 +50,9 @@ int acrn_dev_open(struct inode *inodep, struct file *filep)
 	for (i = 0; i < HUGEPAGE_HLIST_ARRAY_SIZE; i++)
 		INIT_HLIST_HEAD(&vm->hugepage_hlist[i]);
 	mutex_init(&vm->hugepage_lock);
+
+	INIT_LIST_HEAD(&vm->ioreq_client_list);
+	spin_lock_init(&vm->ioreq_client_lock);
 
 	write_lock_bh(&acrn_vm_list_lock);
 	vm_list_add(&vm->list);
@@ -112,9 +116,20 @@ long acrn_dev_ioctl(struct file *filep,
 		vm->vmid = created_vm->vmid;
 		atomic_set(&vm->vcpu_num, 0);
 
+		ret = acrn_ioreq_init(vm, created_vm->req_buf);
+		if (ret < 0)
+			goto ioreq_buf_fail;
+
 		pr_debug("acrn: VM %d created\n", created_vm->vmid);
 		kfree(created_vm);
 		break;
+
+ioreq_buf_fail:
+		hcall_destroy_vm(created_vm->vmid);
+		vm->vmid = ACRN_INVALID_VMID;
+		kfree(created_vm);
+		break;
+
 	}
 
 	case IC_START_VM: {
@@ -344,6 +359,47 @@ long acrn_dev_ioctl(struct file *filep,
 		break;
 	}
 
+	case IC_CREATE_IOREQ_CLIENT: {
+		int client_id;
+
+		client_id = acrn_ioreq_create_fallback_client(vm->vmid,
+							      "acrndm");
+		if (client_id < 0)
+			return -EFAULT;
+		return client_id;
+	}
+
+	case IC_DESTROY_IOREQ_CLIENT: {
+		int client = ioctl_param;
+
+		acrn_ioreq_destroy_client(client);
+		break;
+	}
+
+	case IC_ATTACH_IOREQ_CLIENT: {
+		int client = ioctl_param;
+
+		return acrn_ioreq_attach_client(client);
+	}
+
+	case IC_NOTIFY_REQUEST_FINISH: {
+		struct ioreq_notify notify;
+
+		if (copy_from_user(&notify, (void __user *)ioctl_param,
+				   sizeof(notify)))
+			return -EFAULT;
+
+		ret = acrn_ioreq_complete_request(notify.client_id,
+						  notify.vcpu, NULL);
+		if (ret < 0)
+			return -EFAULT;
+		break;
+	}
+	case IC_CLEAR_VM_IOREQ: {
+		acrn_ioreq_clear_request(vm);
+		break;
+	}
+
 	default:
 		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
 		ret = -EINVAL;
@@ -379,6 +435,7 @@ static const struct file_operations fops = {
 	.open = acrn_dev_open,
 	.release = acrn_dev_release,
 	.unlocked_ioctl = acrn_dev_ioctl,
+	.poll = acrn_dev_poll,
 };
 
 static struct miscdevice acrn_dev = {
@@ -422,6 +479,8 @@ static int __init acrn_init(void)
 		pr_err("Can't register acrn as misc dev\n");
 		return ret;
 	}
+
+	acrn_ioreq_driver_init();
 
 	return 0;
 }

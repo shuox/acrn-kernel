@@ -10,6 +10,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/refcount.h>
+#include <linux/poll.h>
 
 struct vm_memory_region {
 #define MR_ADD		0
@@ -66,6 +67,7 @@ struct wp_data {
 
 enum ACRN_VM_FLAGS {
 	ACRN_VM_DESTROYED = 0,
+	ACRN_VM_IOREQ_FREE,
 };
 
 extern struct list_head acrn_vm_list;
@@ -89,6 +91,12 @@ void vm_list_add(struct list_head *list);
  * @flags: VM flag bits
  * @monitor_page: the page for monitor interrupt
  * @hugepage_hlist: hash list of hugepage
+ * @ioreq_fallback_client: default ioreq client
+ * @ioreq_client_lock: spinlock to protect ioreq_client_list
+ * @ioreq_client_list: list of ioreq clients
+ * @req_buf: request buffer shared between HV, SOS and UOS
+ * @pg: pointer to linux page which holds req_buf
+ * @pci_conf_addr: the saved pci_conf1_addr for 0xCF8
  */
 struct acrn_vm {
 	struct device *dev;
@@ -102,6 +110,13 @@ struct acrn_vm {
 	/* mutex to protect hugepage_hlist */
 	struct mutex hugepage_lock;
 	struct hlist_head hugepage_hlist[HUGEPAGE_HLIST_ARRAY_SIZE];
+	int ioreq_fallback_client;
+	/* the spin_lock to protect ioreq_client_list */
+	spinlock_t ioreq_client_lock;
+	struct list_head ioreq_client_list;
+	struct acrn_request_buffer *req_buf;
+	struct page *pg;
+	u32 pci_conf_addr;
 };
 
 int acrn_vm_destroy(struct acrn_vm *vm);
@@ -117,4 +132,23 @@ void hugepage_free_guest(struct acrn_vm *vm);
 void *hugepage_map_guest_phys(struct acrn_vm *vm, u64 guest_phys, size_t size);
 int hugepage_unmap_guest_phys(struct acrn_vm *vm, u64 guest_phys);
 int set_memory_regions(struct set_regions *regions);
+
+/**
+ * @brief Info to set ioreq buffer for a created VM
+ *
+ * the parameter for HC_SET_IOREQ_BUFFER hypercall
+ */
+struct acrn_set_ioreq_buffer {
+	/** host physical address of VM request_buffer */
+	u64 req_buf;
+};
+
+int acrn_ioreq_init(struct acrn_vm *vm, unsigned long vma);
+void acrn_ioreq_free(struct acrn_vm *vm);
+int acrn_ioreq_create_fallback_client(unsigned short vmid, char *name);
+unsigned int acrn_dev_poll(struct file *filep, poll_table *wait);
+void acrn_ioreq_driver_init(void);
+void acrn_ioreq_clear_request(struct acrn_vm *vm);
+int acrn_ioreq_distribute_request(struct acrn_vm *vm);
+
 #endif

@@ -96,4 +96,106 @@ extern int acrn_write_protect_page(unsigned short vmid, unsigned long gpa,
 extern int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
 			   unsigned long msi_data);
 
+
+/* the API related with emulated mmio ioreq */
+typedef	int (*ioreq_handler_t)(int client_id,
+			       unsigned long *ioreqs_map,
+			       void *client_priv);
+
+/**
+ * acrn_ioreq_create_client - create ioreq client
+ *
+ * @vmid: ID to identify guest
+ * @handler: ioreq_handler of ioreq client
+ *           If client wants to handle request in client thread context, set
+ *           this parameter to NULL. If client wants to handle request out of
+ *           client thread context, set handler function pointer of its own.
+ *           acrn_hsm will create kernel thread and call handler to handle
+ *           request(This is recommended).
+ *
+ * @client_priv: the private structure for the given client.
+ *           When handler is not NULL, this is required and used as the
+ *           third argument of ioreq_handler callback
+ *
+ * @name: the name of ioreq client
+ *
+ * Return: client id on success, <0 on error
+ */
+int acrn_ioreq_create_client(unsigned short vmid,
+			     ioreq_handler_t handler,
+			     void *client_priv,
+			     char *name);
+
+/**
+ * acrn_ioreq_destroy_client - destroy ioreq client
+ *
+ * @client_id: client id to identify ioreq client
+ *
+ * Return:
+ */
+void acrn_ioreq_destroy_client(int client_id);
+
+/**
+ * acrn_ioreq_add_iorange - add iorange monitored by ioreq client
+ *
+ * @client_id: client id to identify ioreq client
+ * @type: iorange type
+ * @start: iorange start address
+ * @end: iorange end address
+ *
+ * Return: 0 on success, <0 on error
+ */
+int acrn_ioreq_add_iorange(int client_id, uint32_t type,
+			   long start, long end);
+
+/**
+ * acrn_ioreq_del_iorange - del iorange monitored by ioreq client
+ *
+ * @client_id: client id to identify ioreq client
+ * @type: iorange type
+ * @start: iorange start address
+ * @end: iorange end address
+ *
+ * Return: 0 on success, <0 on error
+ */
+int acrn_ioreq_del_iorange(int client_id, uint32_t type,
+			   long start, long end);
+
+/**
+ * acrn_ioreq_get_reqbuf - get request buffer
+ * request buffer is shared by all clients in one guest
+ *
+ * @client_id: client id to identify ioreq client
+ *
+ * Return: pointer to request buffer, NULL on error
+ */
+struct acrn_request *acrn_ioreq_get_reqbuf(int client_id);
+
+/**
+ * acrn_ioreq_attach_client - start handle request for ioreq client
+ * If request is handled out of client thread context, this function is
+ * only called once to be ready to handle new request.
+ *
+ * If request is handled in client thread context, this function must
+ * be called every time after the previous request handling is completed
+ * to be ready to handle new request.
+ *
+ * @client_id: client id to identify ioreq client
+ *
+ * Return: 0 on success, <0 on error, 1 if ioreq client is destroying
+ */
+int acrn_ioreq_attach_client(int client_id);
+
+/**
+ * acrn_ioreq_complete_request - notify guest request handling is completed
+ *
+ * @client_id: client id to identify ioreq client
+ * @vcpu: identify request submitter
+ * @req: the acrn_request that is marked as completed
+ *
+ * Return: 0 on success, <0 on error
+ */
+int acrn_ioreq_complete_request(int client_id, uint64_t vcpu,
+				struct acrn_request *req);
+
 #endif

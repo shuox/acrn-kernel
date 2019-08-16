@@ -229,6 +229,17 @@ struct acrn_msi_entry {
 	uint64_t msi_data;
 };
 
+/**
+ * struct ioreq_notify - data structure to notify hypervisor ioreq is handled
+ *
+ * @client_id: client id to identify ioreq client
+ * @vcpu: identify the ioreq submitter
+ */
+struct ioreq_notify {
+	int32_t client_id;
+	uint32_t vcpu;
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -254,6 +265,15 @@ struct acrn_msi_entry {
 #define IC_INJECT_MSI                  _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x03)
 #define IC_VM_INTR_MONITOR             _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x04)
 #define IC_SET_IRQLINE                 _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x05)
+
+/* DM ioreq management */
+#define IC_ID_IOREQ_BASE                0x30UL
+#define IC_SET_IOREQ_BUFFER             _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x00)
+#define IC_NOTIFY_REQUEST_FINISH        _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x01)
+#define IC_CREATE_IOREQ_CLIENT          _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x02)
+#define IC_ATTACH_IOREQ_CLIENT          _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x03)
+#define IC_DESTROY_IOREQ_CLIENT         _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x04)
+#define IC_CLEAR_VM_IOREQ               _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x05)
 
 /* Guest memory management */
 #define IC_ID_MEM_BASE                  0x40UL

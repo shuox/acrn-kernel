@@ -52,6 +52,11 @@ void put_vm(struct acrn_vm *vm)
 			put_page(vm->monitor_page);
 			vm->monitor_page = NULL;
 		}
+		if (vm->req_buf && vm->pg) {
+			put_page(vm->pg);
+			vm->pg = NULL;
+			vm->req_buf = NULL;
+		}
 		kfree(vm);
 		pr_debug("hsm: freed vm\n");
 	}
