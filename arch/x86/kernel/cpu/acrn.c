@@ -56,6 +56,18 @@ __visible void __irq_entry acrn_hv_vector_handler(struct pt_regs *regs)
 	set_irq_regs(old_regs);
 }
 
+void acrn_setup_intr_irq(void (*handler)(void))
+{
+	acrn_intr_handler = handler;
+}
+EXPORT_SYMBOL_GPL(acrn_setup_intr_irq);
+
+void acrn_remove_intr_irq(void)
+{
+	acrn_intr_handler = NULL;
+}
+EXPORT_SYMBOL_GPL(acrn_remove_intr_irq);
+
 const __initconst struct hypervisor_x86 x86_hyper_acrn = {
 	.name                   = "ACRN",
 	.detect                 = acrn_detect,
