@@ -412,6 +412,81 @@ ioreq_buf_fail:
 		break;
 	}
 
+	case IC_PM_GET_CPU_STATE: {
+		u64 cmd;
+
+		if (copy_from_user(&cmd, (void *)ioctl_param, sizeof(cmd)))
+			return -EFAULT;
+
+		switch (cmd & PMCMD_TYPE_MASK) {
+		case PMCMD_GET_PX_CNT:
+		case PMCMD_GET_CX_CNT: {
+			u64 *pm_info;
+
+			pm_info = kmalloc(sizeof(u64), GFP_KERNEL);
+			if (!pm_info)
+				return -ENOMEM;
+
+			ret = hcall_get_cpu_state(cmd, virt_to_phys(pm_info));
+			if (ret < 0) {
+				kfree(pm_info);
+				return -EFAULT;
+			}
+
+			if (copy_to_user((void __user *)ioctl_param,
+					 pm_info, sizeof(u64)))
+				ret = -EFAULT;
+
+			kfree(pm_info);
+			break;
+		}
+		case PMCMD_GET_PX_DATA: {
+			struct cpu_px_data *px_data;
+
+			px_data = kmalloc(sizeof(*px_data), GFP_KERNEL);
+			if (!px_data)
+				return -ENOMEM;
+
+			ret = hcall_get_cpu_state(cmd, virt_to_phys(px_data));
+			if (ret < 0) {
+				kfree(px_data);
+				return -EFAULT;
+			}
+
+			if (copy_to_user((void __user *)ioctl_param,
+					 px_data, sizeof(*px_data)))
+				ret = -EFAULT;
+
+			kfree(px_data);
+			break;
+		}
+		case PMCMD_GET_CX_DATA: {
+			struct cpu_cx_data *cx_data;
+
+			cx_data = kmalloc(sizeof(*cx_data), GFP_KERNEL);
+			if (!cx_data)
+				return -ENOMEM;
+
+			ret = hcall_get_cpu_state(cmd, virt_to_phys(cx_data));
+			if (ret < 0) {
+				kfree(cx_data);
+				return -EFAULT;
+			}
+
+			if (copy_to_user((void __user *)ioctl_param,
+					 cx_data, sizeof(*cx_data)))
+				ret = -EFAULT;
+			kfree(cx_data);
+			break;
+		}
+		default:
+			ret = -EFAULT;
+			break;
+		}
+
+		break;
+	}
+
 	default:
 		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
 		ret = -EINVAL;

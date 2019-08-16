@@ -240,6 +240,39 @@ struct ioreq_notify {
 	uint32_t vcpu;
 };
 
+struct acrn_generic_address {
+	uint8_t		space_id;
+	uint8_t		bit_width;
+	uint8_t		bit_offset;
+	uint8_t		access_size;
+	uint64_t	address;
+};
+
+struct cpu_cx_data {
+	struct acrn_generic_address cx_reg;
+	uint8_t		type;
+	uint32_t	latency;
+	uint64_t	power;
+};
+
+struct cpu_px_data {
+	uint64_t core_frequency;	/* megahertz */
+	uint64_t power;			/* milliWatts */
+	uint64_t transition_latency;	/* microseconds */
+	uint64_t bus_master_latency;	/* microseconds */
+	uint64_t control;		/* control value */
+	uint64_t status;		/* success indicator */
+};
+
+#define PMCMD_TYPE_MASK		0x000000ff
+
+enum pm_cmd_type {
+	PMCMD_GET_PX_CNT,
+	PMCMD_GET_PX_DATA,
+	PMCMD_GET_CX_CNT,
+	PMCMD_GET_CX_DATA,
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -287,4 +320,7 @@ struct ioreq_notify {
 #define IC_SET_PTDEV_INTR_INFO         _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x03)
 #define IC_RESET_PTDEV_INTR_INFO       _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x04)
 
+/* Power management */
+#define IC_ID_PM_BASE                   0x60UL
+#define IC_PM_GET_CPU_STATE            _IC_ID(IC_ID, IC_ID_PM_BASE + 0x00)
 #endif /* __ACRN_IOCTL_DEFS_H__ */
