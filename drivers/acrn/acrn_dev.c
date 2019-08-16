@@ -12,6 +12,9 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/fs.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
@@ -19,8 +22,13 @@
 #include <linux/miscdevice.h>
 #include <asm/acrn.h>
 #include <asm/hypervisor.h>
+#include <linux/acrn/acrn_ioctl_defs.h>
+
+#include "acrn_hypercall.h"
 
 #define	DEVICE_NAME	"acrn_hsm"
+
+static struct api_version acrn_api_version;
 
 static
 int acrn_dev_open(struct inode *inodep, struct file *filep)
@@ -32,6 +40,12 @@ static
 long acrn_dev_ioctl(struct file *filep,
 		    unsigned int ioctl_num, unsigned long ioctl_param)
 {
+	if (ioctl_num == IC_GET_API_VERSION) {
+		if (copy_to_user((void __user *)ioctl_param, &acrn_api_version,
+				 sizeof(acrn_api_version)))
+			return -EFAULT;
+	}
+
 	return 0;
 }
 
@@ -52,6 +66,8 @@ static struct miscdevice acrn_dev = {
 	.fops	= &fops,
 };
 
+#define SUPPORT_HV_API_VERSION_MAJOR	1
+#define SUPPORT_HV_API_VERSION_MINOR	0
 static int __init acrn_init(void)
 {
 	int ret;
@@ -61,6 +77,24 @@ static int __init acrn_init(void)
 
 	if (!acrn_is_privilege_vm())
 		return -EPERM;
+
+	memset(&acrn_api_version, 0, sizeof(acrn_api_version));
+	if (hcall_get_api_version(slow_virt_to_phys(&acrn_api_version)) < 0) {
+		pr_err("acrn: failed to get api version from Hypervisor !\n");
+		return -EINVAL;
+	}
+
+	if (acrn_api_version.major_version >= SUPPORT_HV_API_VERSION_MAJOR &&
+	    acrn_api_version.minor_version >= SUPPORT_HV_API_VERSION_MINOR) {
+		pr_info("ACRN: hv api version %d.%d\n",
+			acrn_api_version.major_version,
+			acrn_api_version.minor_version);
+	} else {
+		pr_err("ACRN: not support hv api version %d.%d!\n",
+		       acrn_api_version.major_version,
+		       acrn_api_version.minor_version);
+		return -EINVAL;
+	}
 
 	ret = misc_register(&acrn_dev);
 	if (ret) {
