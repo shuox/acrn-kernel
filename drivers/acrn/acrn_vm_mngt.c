@@ -12,6 +12,7 @@
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/rwlock_types.h>
+#include <linux/acrn/acrn_ioctl_defs.h>
 
 #include "acrn_hypercall.h"
 #include "acrn_drv_internal.h"
@@ -43,6 +44,7 @@ void get_vm(struct acrn_vm *vm)
 void put_vm(struct acrn_vm *vm)
 {
 	if (refcount_dec_and_test(&vm->refcnt)) {
+		free_guest_mem(vm);
 		kfree(vm);
 		pr_debug("hsm: freed vm\n");
 	}

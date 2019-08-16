@@ -14,6 +14,8 @@
 #include <stdint.h>
 #endif
 
+#include "acrn_common_def.h"
+
 /**
  * struct api_version - data structure to track ACRN_SRV API version
  *
@@ -141,6 +143,39 @@ struct acrn_set_vcpu_regs {
 	struct acrn_vcpu_regs vcpu_regs;
 };
 
+#define VM_MEMMAP_SYSMEM       0
+#define VM_MEMMAP_MMIO         1
+
+/**
+ * struct vm_memmap - EPT memory mapping info for guest
+ */
+struct vm_memmap {
+	/** @type: memory mapping type */
+	uint32_t type;
+	/** @using_vma: using vma_base to get vm0_gpa,
+	 * only for type == VM_SYSTEM
+	 */
+	uint32_t using_vma;
+	/** @gpa: user OS guest physical start address of memory mapping */
+	uint64_t gpa;
+	/** union */
+	union {
+		/** @hpa: host physical start address of memory,
+		 * only for type == VM_MEMMAP_MMIO
+		 */
+		uint64_t hpa;
+		/** @vma_base: service OS user virtual start address of
+		 * memory, only for type == VM_MEMMAP_SYSMEM &&
+		 * using_vma == true
+		 */
+		uint64_t vma_base;
+	};
+	/** @len: the length of memory range mapped */
+	uint64_t len;	/* mmap length */
+	/** @prot: memory mapping attribute */
+	uint32_t prot;	/* RWX */
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -160,5 +195,11 @@ struct acrn_set_vcpu_regs {
 #define IC_CREATE_VCPU                 _IC_ID(IC_ID, IC_ID_VM_BASE + 0x04)
 #define IC_RESET_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x05)
 #define IC_SET_VCPU_REGS               _IC_ID(IC_ID, IC_ID_VM_BASE + 0x06)
+
+
+/* Guest memory management */
+#define IC_ID_MEM_BASE                  0x40UL
+#define IC_SET_MEMSEG                   _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x01)
+#define IC_UNSET_MEMSEG                 _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x02)
 
 #endif /* __ACRN_IOCTL_DEFS_H__ */

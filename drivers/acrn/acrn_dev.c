@@ -35,6 +35,7 @@ static
 int acrn_dev_open(struct inode *inodep, struct file *filep)
 {
 	struct acrn_vm *vm;
+	int i;
 
 	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
 	if (!vm)
@@ -43,6 +44,10 @@ int acrn_dev_open(struct inode *inodep, struct file *filep)
 	refcount_set(&vm->refcnt, 1);
 	vm->vmid = ACRN_INVALID_VMID;
 	vm->dev = acrn_device;
+
+	for (i = 0; i < HUGEPAGE_HLIST_ARRAY_SIZE; i++)
+		INIT_HLIST_HEAD(&vm->hugepage_hlist[i]);
+	mutex_init(&vm->hugepage_lock);
 
 	write_lock_bh(&acrn_vm_list_lock);
 	vm_list_add(&vm->list);
@@ -191,6 +196,28 @@ long acrn_dev_ioctl(struct file *filep,
 		}
 
 		return ret;
+	}
+
+	case IC_SET_MEMSEG: {
+		struct vm_memmap memmap;
+
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = map_guest_memseg(vm, &memmap);
+		break;
+	}
+
+	case IC_UNSET_MEMSEG: {
+		struct vm_memmap memmap;
+
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = unmap_guest_memseg(vm, &memmap);
+		break;
 	}
 
 	default:
