@@ -10,6 +10,7 @@
  */
 
 #include <linux/interrupt.h>
+#include <asm/acrn.h>
 #include <asm/apic.h>
 #include <asm/cpufeatures.h>
 #include <asm/desc.h>
@@ -54,6 +55,18 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_acrn_hv_callback)
 
 	set_irq_regs(old_regs);
 }
+
+void acrn_setup_intr_irq(void (*handler)(void))
+{
+	acrn_intr_handler = handler;
+}
+EXPORT_SYMBOL(acrn_setup_intr_irq);
+
+void acrn_remove_intr_irq(void)
+{
+	acrn_intr_handler = NULL;
+}
+EXPORT_SYMBOL(acrn_remove_intr_irq);
 
 const __initconst struct hypervisor_x86 x86_hyper_acrn = {
 	.name                   = "ACRN",
