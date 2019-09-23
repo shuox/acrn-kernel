@@ -143,6 +143,56 @@ long acrn_dev_ioctl(struct file *filep,
 		break;
 	}
 
+	case IC_CREATE_VCPU: {
+		struct acrn_create_vcpu *cv;
+
+		cv = kmalloc(sizeof(*cv), GFP_KERNEL);
+		if (!cv)
+			return -ENOMEM;
+
+		if (copy_from_user(cv, (void __user *)ioctl_param,
+				   sizeof(struct acrn_create_vcpu))) {
+			kfree(cv);
+			return -EFAULT;
+		}
+
+		ret = hcall_create_vcpu(vm->vmid, virt_to_phys(cv));
+		if (ret < 0) {
+			pr_err("acrn: failed to create vcpu %d for VM %d!\n",
+			       cv->vcpu_id, vm->vmid);
+			kfree(cv);
+			return -EFAULT;
+		}
+		atomic_inc(&vm->vcpu_num);
+		kfree(cv);
+
+		return ret;
+	}
+
+	case IC_SET_VCPU_REGS: {
+		struct acrn_set_vcpu_regs *cpu_regs;
+
+		cpu_regs = kmalloc(sizeof(*cpu_regs), GFP_KERNEL);
+		if (!cpu_regs)
+			return -ENOMEM;
+
+		if (copy_from_user(cpu_regs, (void __user *)ioctl_param,
+				   sizeof(*cpu_regs))) {
+			kfree(cpu_regs);
+			return -EFAULT;
+		}
+
+		ret = hcall_set_vcpu_regs(vm->vmid, virt_to_phys(cpu_regs));
+		kfree(cpu_regs);
+		if (ret < 0) {
+			pr_err("acrn: failed to set bsp state of vm %d!\n",
+			       vm->vmid);
+			return -EFAULT;
+		}
+
+		return ret;
+	}
+
 	default:
 		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
 		ret = -EINVAL;
