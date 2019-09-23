@@ -285,6 +285,13 @@ struct acrn_ioeventfd {
 	uint64_t data;
 };
 
+#define ACRN_IRQFD_FLAG_DEASSIGN	0x01
+struct acrn_irqfd {
+	int32_t fd;
+	uint32_t flags;
+	struct acrn_msi_entry msi;
+};
+
 /*
  * Common IOCTL ID definition for DM
  */
@@ -339,5 +346,6 @@ struct acrn_ioeventfd {
 /* VHM eventfd */
 #define IC_ID_EVENT_BASE		0x70UL
 #define IC_EVENT_IOEVENTFD		_IC_ID(IC_ID, IC_ID_EVENT_BASE + 0x00)
+#define IC_EVENT_IRQFD			_IC_ID(IC_ID, IC_ID_EVENT_BASE + 0x01)
 
 #endif /* __ACRN_IOCTL_DEFS_H__ */

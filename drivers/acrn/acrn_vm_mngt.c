@@ -75,6 +75,7 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 		return 0;
 
 	acrn_ioeventfd_deinit(vm->vmid);
+	acrn_irqfd_deinit(vm->vmid);
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {
 		pr_warn("failed to destroy VM %d\n", vm->vmid);
@@ -91,8 +92,12 @@ int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
 	struct acrn_msi_entry *msi;
 	int ret;
 
-	msi = kzalloc(sizeof(*msi), GFP_KERNEL);
-
+	/* acrn_inject_msi is called in acrn_irqfd_inject from eventfd_signal
+	 * and the interrupt is disabled.
+	 * So the GFP_ATOMIC should be used instead of GFP_KERNEL to
+	 * avoid the sleeping with interrupt disabled.
+	 */
+	msi = kzalloc(sizeof(*msi), GFP_ATOMIC);
 	if (!msi)
 		return -ENOMEM;
 

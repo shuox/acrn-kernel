@@ -156,4 +156,9 @@ int acrn_ioeventfd_init(unsigned short vmid);
 int acrn_ioeventfd_config(unsigned short vmid, struct acrn_ioeventfd *args);
 void acrn_ioeventfd_deinit(unsigned short vmid);
 
+/* irqfd APIs */
+int acrn_irqfd_init(unsigned short vmid);
+int acrn_irqfd_config(unsigned short vmid, struct acrn_irqfd *args);
+void acrn_irqfd_deinit(unsigned short vmid);
+
 #endif

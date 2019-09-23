@@ -123,6 +123,7 @@ long acrn_dev_ioctl(struct file *filep,
 			goto ioreq_buf_fail;
 
 		acrn_ioeventfd_init(vm->vmid);
+		acrn_irqfd_init(vm->vmid);
 		pr_debug("acrn: VM %d created\n", created_vm->vmid);
 		kfree(created_vm);
 		break;
@@ -495,6 +496,16 @@ ioreq_buf_fail:
 			return -EFAULT;
 
 		ret = acrn_ioeventfd_config(vm->vmid, &args);
+		break;
+	}
+
+	case IC_EVENT_IRQFD: {
+		struct acrn_irqfd args;
+
+		if (copy_from_user(&args, (void __user *)ioctl_param,
+				   sizeof(args)))
+			return -EFAULT;
+		ret = acrn_irqfd_config(vm->vmid, &args);
 		break;
 	}
 
