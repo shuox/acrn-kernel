@@ -1,0 +1,55 @@
+        ACRN Hypervisor Introduction
+
+ACRN(TM) is a, flexible, lightweight reference hypervisor, built with real-time
+and safety-criticality in mind, optimized to streamline embedded development
+through an open source platform. ACRN defines a device hypervisor reference
+stack and an architecture for running multiple software subsystems, managed
+securely, on a consolidated system by means of a virtual machine manager
+(VMM). It also defines a reference framework implementation for virtual device
+emulation, called the “ACRN Device Model”.
+
+The ACRN Hypervisor is a Type 1 reference hypervisor stack, running directly
+on the bare-metal hardware, and is suitable for a variety of IoT and embedded
+device solutions. The ACRN hypervisor addresses the gap that currently exists
+between datacenter hypervisors, and hard partitioning hypervisors. The ACRN
+hypervisor architecture partitions the system into different functional
+domains, with carefully selected user VM sharing optimizations for IoT and
+embedded devices.
+
+It implements a hybrid VMM architecture, using a privileged service
+VM, running the Service VM that manages the I/O devices and provides I/O
+mediation. Multiple User VMs are supported, with each of them running Linux,
+Android OS or Windows as the User VM.
+
+Below figure shows the architecture model.
+
+                Service OS                    User OS
+      +----------------------------+  |  +------------------+
+      |        +-------------+     |  |  |                  |
+      |        | Devicemodel |     |  |  |                  |
+      |        +-------------+     |  |  |                  |
+      |-----------------ioctl------|  |  |                  |   ...
+      |kernel space   +----------+ |  |  |                  |
+      |               |   HSM    | |  |  | Drivers          |
+      |               +----------+ |  |  |                  |
+      +--------------------|-------+  |  +------------------+
+  +---------------------hypercall----------------------------------------+
+  |                       ACRN   Hypervisor                              |
+  +----------------------------------------------------------------------+
+  |                          Hardware                                    |
+  +----------------------------------------------------------------------+
+
+ACRN device model is a placeholder of the User VM. It allocates memory for the
+User OS, configures and initializes the devices used by the User VM, loads the
+virtual firmware, initializes the virtual CPU state, and invokes the ACRN
+hypervisor service to execute the guest instructions. ACRN Device model is an
+application running in the Service VM that emulates devices based on command
+line configuration.
+
+HSM(ACRN hypervisor service module) is a important middle layer that allows the
+Linux kernel to communicate with the ACRN hypervisor. It includes the
+management of virtualized CPU/memory/device/interrupt for other ACRN guest. The
+user-space applications can use the provided ACRN ioctls to interact with ACRN
+hypervisor through different hypercalls.
+
+To learn more about ACRN, please go to https://projectacrn.github.io/.

@@ -1,0 +1,41 @@
+I/O Request handling in HSM
+
+I/O requests from the hypervisor are dispatched by HSM in the SOS kernel to a
+registered client, responsible for further processing the I/O access and
+notifying the hypervisor on its completion.
+
+1. Initialization of Shared I/O Request Buffer
+
+For each VM, there is a shared 4-KByte memory region used for I/O request
+communication between the hypervisor and service os. Upon initialization of a
+VM, the devicemodel in service os userland first allocates a 4-KByte page and
+passes the GPA(Guest Physical Address) of the buffer to HV via hypercall. The
+buffer is used as an array of 16 I/O request slots with each I/O request being
+256 bytes. This array is indexed by vCPU ID. Thus, each vCPU of the VM
+corresponds to one I/O request slot in the request buffer since a vCPU cannot
+issue multiple I/O requests at the same time.
+
+2. I/O Clients
+
+An I/O client is either a service os userland application or a service os
+kernel space module responsible for handling I/O access whose address falls in
+a certain range. Each VM has an array of registered I/O clients which are
+initialized with a fixed I/O address range on VM creation. There is a special
+client in each VM, called the fallback client, that handles all I/O requests
+that do not fit into the range of any other client. In the current design the
+device model acts as the fallback client for each VM.
+
+3. Processing I/O Requests
+
+  a) The hypervisor makes an upcall to service os as an interrupt handled by
+     the upcall handler in HSM.
+  b) The upcall handler schedules the execution of the I/O request dispatcher.
+     If the dispatcher is already running, another round of execution is
+     scheduled.
+  c) The I/O request dispatcher looks for I/O requests with the PENDING state,
+     assigns them to registered clients based on the address of the I/O access,
+     updates their state to PROCESSING, and wakes up all clients that have I/O
+     requests to be processed.
+  d) The waked client handles the assigned I/O requests, updates their state to
+     COMPLETE, and notifies the HSM of the completion via ioctl.
+  e) The HSM device notifies the hypervisor of the completion via hypercall.
