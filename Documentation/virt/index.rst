@@ -11,6 +11,7 @@ Linux Virtualization Support
    uml/user_mode_linux
    paravirt_ops
    guest-halt-polling
+   acrn/index
 
 .. only:: html and subproject
 
