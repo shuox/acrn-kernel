@@ -1,0 +1,81 @@
+I/O request handling
+
+1. I/O request
+
+For each VM, there is a shared 4-KByte memory region used for I/O requests
+communication between the hypervisor and Service VM. An I/O request is a
+256-byte structure buffer, which is 'struct acrn_io_request', that be filled
+by the hypervisor when a trapped I/O access happens in User VM.  ACRN
+userspace in the Service VM first allocates a 4-KByte page and passes the
+GPA(Guest Physical Address) of the buffer to hypervisor. The buffer is used as
+an array of 16 I/O request slots with each I/O request slot being 256 bytes.
+This array is indexed by vCPU ID.
+
+2. I/O clients
+
+An I/O client is responsible for handling User VM I/O requests whose accessed
+GPA falls in a certain range. Each VM has an array of registered I/O clients
+which are initialized with a fixed I/O address range on VM creation. There is
+a special client in each VM, called the default client, that handles all I/O
+requests that do not fit into the range of any other clients. In the current
+design the ACRN userspace acts as the default client for each User VM.
+
+Below illustration shows the relationship between I/O requests shared buffer,
+I/O requests and I/O clients.
+
+     +------------------------------------------------------+
+     |                                   The Service VM     |
+     |+--------------------------------------------------+  |
+     ||      +----------------------------------------+  |  |
+     ||      | shared page            ACRN userspace  |  |  |
+     ||      |    +-----------------+  +------------+ |  |  |
+     ||   +----+->| acrn_io_request |<-+The default | |  |  |
+     ||   |  | |  +-----------------+  | I/O client | |  |  |
+     ||   |  | |  |       ...       |  +------------+ |  |  |
+     ||   |  | |  +-----------------+                 |  |  |
+     ||   |  +-|--------------------------------------+  |  |
+     ||---|----|-----------------------------------------|  |
+     ||   |    |                             kernel      |  |
+     ||   |    |            +----------------------+     |  |
+     ||   |    |            | +-------------+  HSM |     |  |
+     ||   |    +--------------+             |      |     |  |
+     ||   |                 | | I/O clients |      |     |  |
+     ||   |                 | |             |      |     |  |
+     ||   |                 | +-------------+      |     |  |
+     ||   |                 +----------------------+     |  |
+     |+---|----------------------------------------------+  |
+     +----|-------------------------------------------------+
+          |
+     +----|-------------------------------------------------+
+     |  +-+-----------+                                     |
+     |  | I/O handler |          The ACRN hypervisor        |
+     |  +-------------+                                     |
+     +------------------------------------------------------+
+
+3. I/O request state transition
+
+The state transitions of a ACRN I/O request are as follows.
+
+   FREE -> PENDING -> PROCESSING -> COMPLETE -> FREE -> ...
+                               \              /
+                                +--> failed -+
+
+FREE: this I/O request slot is empty
+PENDING: a valid I/O request is pending in this slot
+PROCESSING: the I/O request is being processed
+COMPLETE: the I/O request has been processed
+
+When a request is in COMPLETE or FREE state, the request is owned by the
+hypervisor. HSM is in charge of processing the others.
+
+4. Processing flow I/O requests
+
+  a) The hypervisor makes an upcall, which is a notification interrupt, to
+     the Service VM.
+  b) The upcall handler schedules a tasklet to dispatch I/O requests.
+  c) The tasklet looks for the PENDING I/O requests, assigns them to different
+     registered clients based on the address of the I/O accesses, updates
+     their state to PROCESSING, and notifies the corresponding client to handle.
+  d) The notified client handles the assigned I/O requests and updates
+     their states to COMPLETE.
+  e) The HSM notifies the hypervisor of the completion via hypercalls.
