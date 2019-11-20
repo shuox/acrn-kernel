@@ -17,9 +17,31 @@
 #include <asm/hypervisor.h>
 #include <asm/irq_regs.h>
 
-static uint32_t __init acrn_detect(void)
+static uint32_t __acrn_cpuid_base(void)
 {
 	return hypervisor_cpuid_base("ACRNACRNACRN\0\0", 0);
+}
+
+static uint32_t acrn_cpuid_base(void)
+{
+	static uint32_t acrn_cpuid_base = 0xFFFFFFFF;
+
+	if (acrn_cpuid_base == 0xFFFFFFFF)
+		acrn_cpuid_base = __acrn_cpuid_base();
+
+	return acrn_cpuid_base;
+}
+
+bool acrn_is_privilege_vm(void)
+{
+	return cpuid_eax(acrn_cpuid_base() | ACRN_CPUID_FEATURES) &
+		(1 << ACRN_FEATURE_PRIVILEGE_VM);
+}
+EXPORT_SYMBOL_GPL(acrn_is_privilege_vm);
+
+static uint32_t __init acrn_detect(void)
+{
+	return acrn_cpuid_base();
 }
 
 static void __init acrn_init_platform(void)
