@@ -18,9 +18,31 @@
 #include <asm/idtentry.h>
 #include <asm/irq_regs.h>
 
-static uint32_t __init acrn_detect(void)
+static u32 __acrn_cpuid_base(void)
 {
 	return hypervisor_cpuid_base("ACRNACRNACRN\0\0", 0);
+}
+
+static u32 acrn_cpuid_base(void)
+{
+	static uint32_t acrn_cpuid_base = 0xFFFFFFFF;
+
+	if (acrn_cpuid_base == 0xFFFFFFFF)
+		acrn_cpuid_base = __acrn_cpuid_base();
+
+	return acrn_cpuid_base;
+}
+
+bool acrn_is_privileged_vm(void)
+{
+	return cpuid_eax(acrn_cpuid_base() | ACRN_CPUID_FEATURES) &
+			ACRN_FEATURE_PRIVILEGED_VM;
+}
+EXPORT_SYMBOL(acrn_is_privileged_vm);
+
+static u32 __init acrn_detect(void)
+{
+	return acrn_cpuid_base();
 }
 
 static void __init acrn_init_platform(void)
