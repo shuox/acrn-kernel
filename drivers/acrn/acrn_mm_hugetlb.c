@@ -27,10 +27,11 @@
 int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
 	struct page **pages = NULL, *page;
-	int nr_pages, i = 0, order;
+	int nr_pages, i = 0, order, nr_regions = 0;
 	struct vm_memory_region *vm_region;
 	struct map_regions *map_region_data;
 	struct region_mapping *region_mapping;
+	uint64_t guest_vm_pa;
 	void *remap_vaddr;
 	int ret;
 
@@ -41,43 +42,20 @@ int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
 	if (!pages)
 		return -ENOMEM;
+	printk("lskakaxi, malloc pages[%llx], size[%llx] nr_pages[%d]\n",
+			pages, nr_pages * sizeof(struct page *), nr_pages);
 
-	ret = get_user_pages_fast(memmap->vma_base, nr_pages, FOLL_PIN, pages);
+	ret = get_user_pages_fast(memmap->vma_base, nr_pages, FOLL_WRITE, pages);
 	if (unlikely(ret != nr_pages)) {
 		pr_err("Failed to pin page for Guest VM!\n");
 		ret = -ENOMEM;
 		goto err_pin_pages;
 	}
 
-	map_region_data = kzalloc(sizeof(struct map_regions) +
-			sizeof(*vm_region) * nr_pages, GFP_KERNEL);
-	if (!map_region_data) {
-		ret = -ENOMEM;
-		goto err_map_region_data;
-	}
-
-	vm_region = (struct vm_memory_region *)(map_region_data + 1);
-	map_region_data->vmid = vm->vmid;
-	map_region_data->regions_pa = virt_to_phys(vm_region);
-	while (i >= nr_pages) {
-		unsigned int region_size;
-		page = pages[i];
-		order = compound_order(page);
-		region_size = PAGE_SIZE << order;
-		/* fill each memory region into region_array */
-		vm_region->type = MR_ADD;
-		vm_region->guest_vm_pa = memmap->guest_vm_pa;
-		vm_region->host_vm_pa = page_to_phys(page);
-		vm_region->size = region_size;
-		vm_region->attr = (MEM_TYPE_WB & MEM_TYPE_MASK) |
-				  (memmap->attr & MEM_ACCESS_RIGHT_MASK);
-
-		vm_region++;
-		map_region_data->mr_num++;
-		i += 1 << order;
-	}
-
+	/* record host va <-> guest pa mapping */
 	remap_vaddr = vm_map_ram(pages, nr_pages, -1, PAGE_KERNEL);
+	printk("lskakaxi, vm_map_ram remap_addr[%p], nr_pages[%d]\n",
+			remap_vaddr, nr_pages);
 	if (!remap_vaddr) {
 		ret = -ENOMEM;
 		goto err_remap;
@@ -91,6 +69,48 @@ int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 	region_mapping->guest_vm_pa = memmap->guest_vm_pa;
 	mutex_unlock(&vm->regions_mapping_lock);
 
+	/* Calc vm_memory_region array size */
+	while (i < nr_pages) {
+		page = pages[i];
+		VM_BUG_ON_PAGE(PageTail(page), page);
+		order = compound_order(page);
+		nr_regions++;
+		i += 1 << order;
+	}
+	map_region_data = kzalloc(sizeof(struct map_regions) +
+			sizeof(*vm_region) * nr_regions, GFP_KERNEL);
+	printk("lskakaxi, malloc map_region_data[%llx], size[%llx], nr_regions[%d] \n",
+			map_region_data, sizeof(struct map_regions) + sizeof(*vm_region) * nr_regions, nr_regions);
+	if (!map_region_data) {
+		ret = -ENOMEM;
+		goto err_map_region_data;
+	}
+
+	vm_region = (struct vm_memory_region *)(map_region_data + 1);
+	map_region_data->vmid = vm->vmid;
+	map_region_data->mr_num = nr_regions;
+	map_region_data->regions_pa = virt_to_phys(vm_region);
+	guest_vm_pa = memmap->guest_vm_pa;
+	i = 0;
+	while (i < nr_pages) {
+		unsigned int region_size;
+		page = pages[i];
+		VM_BUG_ON_PAGE(PageTail(page), page);
+		order = compound_order(page);
+		region_size = PAGE_SIZE << order;
+		/* fill each memory region into region_array */
+		vm_region->type = MR_ADD;
+		vm_region->guest_vm_pa = guest_vm_pa;
+		vm_region->host_vm_pa = page_to_phys(page);
+		vm_region->size = region_size;
+		vm_region->attr = (MEM_TYPE_WB & MEM_TYPE_MASK) |
+				  (memmap->attr & MEM_ACCESS_RIGHT_MASK);
+
+		vm_region++;
+		guest_vm_pa += region_size;
+		i += 1 << order;
+	}
+
 	/* hypercall to ACRN to setup memory mapping */
 	ret = set_memory_regions(map_region_data);
 	if (ret < 0) {
@@ -102,10 +122,13 @@ int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 	return ret;
 
 err_set_region:
-	vm_unmap_ram(remap_vaddr, nr_pages);
-err_remap:
 	kfree(map_region_data);
 err_map_region_data:
+	mutex_lock(&vm->regions_mapping_lock);
+	vm->regions_mapping_count--;
+	mutex_unlock(&vm->regions_mapping_lock);
+	vm_unmap_ram(remap_vaddr, nr_pages);
+err_remap:
 	for (i = 0; i < nr_pages; i++)
 		put_page(pages[i]);
 err_pin_pages:
