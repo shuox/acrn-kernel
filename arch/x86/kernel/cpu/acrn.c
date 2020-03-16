@@ -32,12 +32,12 @@ static uint32_t acrn_cpuid_base(void)
 	return acrn_cpuid_base;
 }
 
-bool acrn_is_privilege_vm(void)
+bool acrn_is_privileged_vm(void)
 {
 	return cpuid_eax(acrn_cpuid_base() | ACRN_CPUID_FEATURES) &
 		(1 << ACRN_FEATURE_PRIVILEGE_VM);
 }
-EXPORT_SYMBOL_GPL(acrn_is_privilege_vm);
+EXPORT_SYMBOL_GPL(acrn_is_privileged_vm);
 
 static uint32_t __init acrn_detect(void)
 {

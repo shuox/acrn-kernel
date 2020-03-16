@@ -19,7 +19,7 @@ extern void acrn_hv_vector_handler(struct pt_regs *regs);
 
 extern void acrn_setup_intr_irq(void (*handler)(void));
 extern void acrn_remove_intr_irq(void);
-extern bool acrn_is_privilege_vm(void);
+extern bool acrn_is_privileged_vm(void);
 
 /*
  * Hypercalls for ACRN guest

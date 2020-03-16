@@ -17,61 +17,129 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/refcount.h>
+#include <asm/io.h>
 
 #include <linux/acrn/acrn_ioctl_defs.h>
 #include <linux/acrn/acrn_drv.h>
 #include "acrn_drv_internal.h"
 #include "acrn_hypercall.h"
 
-#define HUGEPAGE_2M_SHIFT	21
-#define HUGEPAGE_1G_SHIFT	30
-
-#define HUGEPAGE_1G_HLIST_IDX	(HUGEPAGE_HLIST_ARRAY_SIZE - 1)
-
-struct hugepage_map {
-	struct hlist_node hlist;
-	/* This is added into the temporal list for failure */
-	struct list_head  list_node;
-	u64 vm0_gpa;
-	size_t size;
-	u64 guest_gpa;
-	refcount_t refcount;
-};
-
-static inline
-struct hlist_head *hlist_2m_hash(struct acrn_vm *vm,
-				 unsigned long guest_gpa)
+int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
-	return &vm->hugepage_hlist[guest_gpa >> HUGEPAGE_2M_SHIFT &
-			(HUGEPAGE_2M_HLIST_ARRAY_SIZE - 1)];
+	struct page **pages = NULL, *page;
+	int nr_pages, i = 0, order;
+	struct vm_memory_region *vm_region;
+	struct map_regions *map_region_data;
+	struct region_mapping *region_mapping;
+	void *remap_vaddr;
+	int ret;
+
+	if (!vm || !memmap)
+		return -EINVAL;
+
+	nr_pages = memmap->len >> PAGE_SHIFT;
+	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
+	if (!pages)
+		return -ENOMEM;
+
+	ret = get_user_pages_fast(memmap->vma_base, nr_pages, FOLL_PIN, pages);
+	if (unlikely(ret != nr_pages)) {
+		pr_err("Failed to pin page for Guest VM!\n");
+		ret = -ENOMEM;
+		goto err_pin_pages;
+	}
+
+	map_region_data = kzalloc(sizeof(struct map_regions) +
+			sizeof(*vm_region) * nr_pages, GFP_KERNEL);
+	if (!map_region_data) {
+		ret = -ENOMEM;
+		goto err_map_region_data;
+	}
+
+	vm_region = (struct vm_memory_region *)(map_region_data + 1);
+	map_region_data->vmid = vm->vmid;
+	map_region_data->regions_pa = virt_to_phys(vm_region);
+	while (i >= nr_pages) {
+		unsigned int region_size;
+		page = pages[i];
+		order = compound_order(page);
+		region_size = PAGE_SIZE << order;
+		/* fill each memory region into region_array */
+		vm_region->type = MR_ADD;
+		vm_region->guest_vm_pa = memmap->guest_vm_pa;
+		vm_region->host_vm_pa = page_to_phys(page);
+		vm_region->size = region_size;
+		vm_region->attr = (MEM_TYPE_WB & MEM_TYPE_MASK) |
+				  (memmap->attr & MEM_ACCESS_RIGHT_MASK);
+
+		vm_region++;
+		map_region_data->mr_num++;
+		i += 1 << order;
+	}
+
+	remap_vaddr = vm_map_ram(pages, nr_pages, -1, PAGE_KERNEL);
+	if (!remap_vaddr) {
+		ret = -ENOMEM;
+		goto err_remap;
+	}
+	mutex_lock(&vm->regions_mapping_lock);
+	region_mapping = &vm->regions_mapping[vm->regions_mapping_count++];
+	region_mapping->pages = pages;
+	region_mapping->npages = nr_pages;
+	region_mapping->size = memmap->len;
+	region_mapping->host_vm_va = remap_vaddr;
+	region_mapping->guest_vm_pa = memmap->guest_vm_pa;
+	mutex_unlock(&vm->regions_mapping_lock);
+
+	/* hypercall to ACRN to setup memory mapping */
+	ret = set_memory_regions(map_region_data);
+	if (ret < 0) {
+		pr_err("failed to set regions,ret=%d!\n", ret);
+		goto err_set_region;
+	}
+
+	kfree(map_region_data);
+	return ret;
+
+err_set_region:
+	vm_unmap_ram(remap_vaddr, nr_pages);
+err_remap:
+	kfree(map_region_data);
+err_map_region_data:
+	for (i = 0; i < nr_pages; i++)
+		put_page(pages[i]);
+err_pin_pages:
+	kfree(pages);
+	return ret;
 }
 
-static void add_guest_map(struct acrn_vm *vm, struct hugepage_map *map)
+void hugepage_free_guest(struct acrn_vm *vm)
 {
-	int max_gfn;
+	struct region_mapping *region_mapping;
+	int i, j;
 
-	refcount_set(&map->refcount, 1);
-
-	INIT_HLIST_NODE(&map->hlist);
-
-	max_gfn = (map->guest_gpa + map->size) >> PAGE_SHIFT;
-	if (vm->max_gfn < max_gfn)
-		vm->max_gfn = max_gfn;
-
-	pr_debug("HSM: add hugepage with size=0x%lx,vm0_hpa=0x%llx and its guest gpa = 0x%llx\n",
-		 map->size, map->vm0_gpa, map->guest_gpa);
-
-	mutex_lock(&vm->hugepage_lock);
-	/* 1G hugepage? */
-	if (map->size == (1UL << HUGEPAGE_1G_SHIFT))
-		hlist_add_head(&map->hlist,
-			       &vm->hugepage_hlist[HUGEPAGE_1G_HLIST_IDX]);
-	else
-		hlist_add_head(&map->hlist,
-			       hlist_2m_hash(vm, map->guest_gpa));
-	mutex_unlock(&vm->hugepage_lock);
+	mutex_lock(&vm->regions_mapping_lock);
+	for (i = 0; i < vm->regions_mapping_count; i++) {
+		region_mapping = &vm->regions_mapping[i];
+		for (j = 0; j < region_mapping->npages; j++) {
+			put_page(region_mapping->pages[j]);
+		}
+		kfree(region_mapping->pages);
+	}
+	mutex_unlock(&vm->regions_mapping_lock);
 }
 
+void *hugepage_map_guest_phys(struct acrn_vm *vm, u64 guest_phys, size_t size)
+{
+	return NULL;
+}
+
+int hugepage_unmap_guest_phys(struct acrn_vm *vm, u64 guest_phys)
+{
+	return 0;
+}
+
+#if 0
 int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
 	struct page *page = NULL;
@@ -120,6 +188,8 @@ int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap)
 		map_node->vm0_gpa = page_to_phys(page);
 		map_node->guest_gpa = guest_gpa;
 
+		printk("lskakaxi, vma[%llx] vm0_gpa[%llx] guest_gpa[%llx] compound_order[%d] pagesize[%lx]\n",
+				vma, map_node->vm0_gpa, guest_gpa, compound_order(page), pagesize);
 		/* fill each memory region into region_array */
 		vm_region->type = MR_ADD;
 		vm_region->gpa = guest_gpa;
@@ -273,3 +343,4 @@ int hugepage_unmap_guest_phys(struct acrn_vm *vm, u64 guest_phys)
 	mutex_unlock(&vm->hugepage_lock);
 	return -ESRCH;
 }
+#endif

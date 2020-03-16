@@ -17,37 +17,42 @@ struct vm_memory_region {
 #define MR_DEL		2
 	u32 type;
 
-	/* IN: mem attr */
-	u32 prot;
+	/* IN: memory attribute */
+	u32 attr;
 
-	/* IN: beginning guest GPA to map */
-	u64 gpa;
+	/* IN: physical address of guest VM to be mapped */
+	u64 guest_vm_pa;
 
-	/* IN: VM0's GPA which foreign gpa will be mapped to */
-	u64 vm0_gpa;
+	/* IN: physical address of host VM to be mapped */
+	u64 host_vm_pa;
 
 	/* IN: size of the region */
 	u64 size;
 };
 
-struct set_regions {
-	/*IN: vmid for this hypercall */
+struct map_regions {
+	/* IN: vmid for this hypercall */
 	u16 vmid;
 
-	/** Reserved */
+	/* Reserved */
 	u16 reserved[3];
 
-	/* IN: multi memmaps numbers */
+	/* IN: vm_memory_region number */
 	u32 mr_num;
 
-	/** Reserved */
+	/* Reserved */
 	u32 reserved1;
-	/* IN:
-	 * the gpa of memmaps buffer, point to the memmaps array:
-	 * struct memory_map memmap_array[memmaps_num]
-	 * the max buffer size is one page.
-	 */
-	u64 regions_gpa;
+
+	/* IN: physical address of vm_memory_region array */
+	u64 regions_pa;
+};
+
+struct region_mapping {
+	struct page **pages;
+	int npages;
+	void *host_vm_va;
+	u64 guest_vm_pa;
+	size_t size;
 };
 
 struct wp_data {
@@ -79,6 +84,7 @@ void vm_list_add(struct list_head *list);
 #define HUGEPAGE_1G_HLIST_ARRAY_SIZE	1
 #define HUGEPAGE_HLIST_ARRAY_SIZE	(HUGEPAGE_2M_HLIST_ARRAY_SIZE + \
 					 HUGEPAGE_1G_HLIST_ARRAY_SIZE)
+#define ACRN_MAX_REGION_NUM	256
 /**
  * struct acrn_vm - data structure to track guest
  *
@@ -107,9 +113,11 @@ struct acrn_vm {
 	atomic_t vcpu_num;
 	unsigned long flags;
 	struct page *monitor_page;
-	/* mutex to protect hugepage_hlist */
-	struct mutex hugepage_lock;
-	struct hlist_head hugepage_hlist[HUGEPAGE_HLIST_ARRAY_SIZE];
+
+	struct mutex regions_mapping_lock;
+	struct region_mapping regions_mapping[ACRN_MAX_REGION_NUM];
+	int regions_mapping_count;
+
 	int ioreq_fallback_client;
 	/* the spin_lock to protect ioreq_client_list */
 	spinlock_t ioreq_client_lock;
@@ -131,7 +139,7 @@ int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap);
 void hugepage_free_guest(struct acrn_vm *vm);
 void *hugepage_map_guest_phys(struct acrn_vm *vm, u64 guest_phys, size_t size);
 int hugepage_unmap_guest_phys(struct acrn_vm *vm, u64 guest_phys);
-int set_memory_regions(struct set_regions *regions);
+int set_memory_regions(struct map_regions *regions);
 
 /**
  * @brief Info to set ioreq buffer for a created VM

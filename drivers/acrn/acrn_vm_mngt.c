@@ -41,7 +41,7 @@ struct acrn_vm *find_get_vm(unsigned short vmid)
 
 void get_vm(struct acrn_vm *vm)
 {
-	refcount_inc_checked(&vm->refcnt);
+	refcount_inc(&vm->refcnt);
 }
 
 void put_vm(struct acrn_vm *vm)

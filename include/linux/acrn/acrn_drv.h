@@ -77,12 +77,12 @@ extern int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
  *
  * @vmid: guest vmid
  * @gpa: gpa in guest vmid
- * @set: set or clear page write protection
+ * @enable_wp: enable/disable write protection of page on gpa
  *
  * Return: 0 on success, <0 for error.
  */
 extern int acrn_write_protect_page(unsigned short vmid, unsigned long gpa,
-				   unsigned char set);
+				   bool enable_wp);
 
 /**
  * acrn_inject_msi() - inject MSI interrupt to guest

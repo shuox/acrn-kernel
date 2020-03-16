@@ -29,10 +29,22 @@
 #include "acrn_drv_internal.h"
 #include "acrn_hypercall.h"
 
-static int set_memory_region(unsigned short vmid,
-			     struct vm_memory_region *region)
+int set_memory_regions(struct map_regions *regions)
 {
-	struct set_regions *regions;
+	if (!regions)
+		return -EINVAL;
+
+	if (regions->mr_num > 0)
+		if (hcall_set_memory_regions(virt_to_phys(regions)) < 0)
+			return -EFAULT;
+
+	return 0;
+}
+
+static int set_memory_region(unsigned short vmid,
+		struct vm_memory_region *region)
+{
+	struct map_regions *regions;
 	int ret;
 
 	regions = kzalloc(sizeof(*regions), GFP_KERNEL);
@@ -41,12 +53,12 @@ static int set_memory_region(unsigned short vmid,
 
 	regions->vmid = vmid;
 	regions->mr_num = 1;
-	regions->regions_gpa = virt_to_phys(region);
+	regions->regions_pa = virt_to_phys(region);
 
 	ret = set_memory_regions(regions);
 	kfree(regions);
 	if (ret < 0) {
-		pr_err("acrn: failed to set memory region for vm[%d]!\n",
+		pr_err("acrn: Failed to set memory region for vm[%d]!\n",
 		       vmid);
 		return -EFAULT;
 	}
@@ -66,14 +78,14 @@ int acrn_add_memory_region(unsigned short vmid, unsigned long gpa,
 		return -ENOMEM;
 
 	region->type = MR_ADD;
-	region->gpa = gpa;
-	region->vm0_gpa = host_gpa;
+	region->guest_vm_pa = gpa;
+	region->host_vm_pa = host_gpa;
 	region->size = size;
-	region->prot = ((mem_type & MEM_TYPE_MASK) |
+	region->attr = ((mem_type & MEM_TYPE_MASK) |
 			(mem_access_right & MEM_ACCESS_RIGHT_MASK));
 	ret = set_memory_region(vmid, region);
-	kfree(region);
 
+	kfree(region);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(acrn_add_memory_region);
@@ -89,39 +101,20 @@ int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
 		return -ENOMEM;
 
 	region->type = MR_DEL;
-	region->gpa = gpa;
-	region->vm0_gpa = 0;
+	region->guest_vm_pa = gpa;
+	region->host_vm_pa = 0;
 	region->size = size;
-	region->prot = 0;
+	region->attr = 0;
 
 	ret = set_memory_region(vmid, region);
-	kfree(region);
 
+	kfree(region);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(acrn_del_memory_region);
 
-int set_memory_regions(struct set_regions *regions)
-{
-	if (!regions)
-		return -EINVAL;
-
-	if (regions->mr_num > 0) {
-		if (hcall_set_memory_regions(virt_to_phys(regions)) < 0) {
-			pr_err("acrn: failed to set memory regions!\n");
-			return -EFAULT;
-		}
-	}
-
-	return 0;
-}
-
-/*
- * when set is true, set page write protection,
- * else clear page write protection.
- */
 int acrn_write_protect_page(unsigned short vmid,
-			    unsigned long gpa, unsigned char set)
+			    unsigned long gpa, bool enable_wp)
 {
 	struct wp_data *wp;
 	int ret = 0;
@@ -130,17 +123,14 @@ int acrn_write_protect_page(unsigned short vmid,
 	if (!wp)
 		return -ENOMEM;
 
-	wp->set = set;
+	wp->set = enable_wp ? 1 : 0;
 	wp->gpa = gpa;
 	ret = hcall_write_protect_page(vmid, virt_to_phys(wp));
 	kfree(wp);
 
 	if (ret < 0) {
-		pr_err("acrn: vm[%d] %s failed !\n", vmid, __func__);
 		return -EFAULT;
 	}
-
-	pr_debug("VHM: %s, gpa: 0x%lx, set: %d\n", __func__, gpa, set);
 
 	return 0;
 }
@@ -149,7 +139,7 @@ EXPORT_SYMBOL_GPL(acrn_write_protect_page);
 int map_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
 	/* hugetlb use vma to do the mapping */
-	if (memmap->type == VM_MEMMAP_SYSMEM && memmap->using_vma)
+	if (memmap->type == VM_MEMMAP_SYSMEM)
 		return hugepage_map_guest(vm, memmap);
 
 	/* mmio */
@@ -159,9 +149,9 @@ int map_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 		return -EINVAL;
 	}
 
-	if (acrn_add_memory_region(vm->vmid, memmap->gpa,
-				   memmap->hpa, memmap->len,
-				   MEM_TYPE_UC, memmap->prot) < 0){
+	if (acrn_add_memory_region(vm->vmid, memmap->guest_vm_pa,
+				   memmap->host_vm_pa, memmap->len,
+				   MEM_TYPE_UC, memmap->attr) < 0){
 		pr_err("acrn: failed to set memory region %d!\n", vm->vmid);
 		return -EFAULT;
 	}
@@ -178,7 +168,7 @@ int unmap_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 		return -EINVAL;
 	}
 
-	if (acrn_del_memory_region(vm->vmid, memmap->gpa, memmap->len) < 0) {
+	if (acrn_del_memory_region(vm->vmid, memmap->guest_vm_pa, memmap->len) < 0) {
 		pr_err("hsm: failed to del memory region %d!\n", vm->vmid);
 		return -EFAULT;
 	}

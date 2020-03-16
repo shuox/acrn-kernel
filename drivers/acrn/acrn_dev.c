@@ -39,7 +39,6 @@ static
 int acrn_dev_open(struct inode *inodep, struct file *filep)
 {
 	struct acrn_vm *vm;
-	int i;
 
 	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
 	if (!vm)
@@ -47,11 +46,8 @@ int acrn_dev_open(struct inode *inodep, struct file *filep)
 
 	refcount_set(&vm->refcnt, 1);
 	vm->vmid = ACRN_INVALID_VMID;
-	vm->dev = acrn_device;
 
-	for (i = 0; i < HUGEPAGE_HLIST_ARRAY_SIZE; i++)
-		INIT_HLIST_HEAD(&vm->hugepage_hlist[i]);
-	mutex_init(&vm->hugepage_lock);
+	mutex_init(&vm->regions_mapping_lock);
 
 	INIT_LIST_HEAD(&vm->ioreq_client_list);
 	spin_lock_init(&vm->ioreq_client_lock);
@@ -70,6 +66,7 @@ long acrn_dev_ioctl(struct file *filep,
 		    unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	struct acrn_vm *vm;
+	int ret = 0;
 
 	vm = (struct acrn_vm *)filep->private_data;
 	if (!vm) {
@@ -81,6 +78,7 @@ long acrn_dev_ioctl(struct file *filep,
 		if (copy_to_user((void __user *)ioctl_param, &acrn_api_version,
 				 sizeof(acrn_api_version)))
 			return -EFAULT;
+		return 0;
 	}
 
 	if ((vm->vmid == ACRN_INVALID_VMID) && (ioctl_num != IC_CREATE_VM)) {
@@ -354,7 +352,7 @@ ioreq_buf_fail:
 		ret = hcall_vm_intr_monitor(vm->vmid, page_to_phys(page));
 		if (ret < 0) {
 			put_page(page);
-			pr_err("acrn-dev: monitor intr data err=%ld\n", ret);
+			pr_err("acrn-dev: monitor intr data err=%d\n", ret);
 			return -EFAULT;
 		}
 		if (vm->monitor_page)
@@ -516,7 +514,7 @@ ioreq_buf_fail:
 	}
 
 
-	return 0;
+	return ret;
 }
 
 
@@ -622,7 +620,7 @@ static int __init acrn_init(void)
 	if (x86_hyper_type != X86_HYPER_ACRN)
 		return -ENODEV;
 
-	if (!acrn_is_privilege_vm())
+	if (!acrn_is_privileged_vm())
 		return -EPERM;
 
 	memset(&acrn_api_version, 0, sizeof(acrn_api_version));
@@ -649,7 +647,7 @@ static int __init acrn_init(void)
 		return ret;
 	}
 
-	if (sysfs_create_group(&acrn_device->kobj, &acrn_attr_group)) {
+	if (sysfs_create_group(&acrn_dev.this_device->kobj, &acrn_attr_group)) {
 		pr_warn("acrn: sysfs create failed\n");
 		misc_deregister(&acrn_dev);
 		return -EINVAL;
@@ -668,7 +666,7 @@ static void __exit acrn_exit(void)
 {
 	tasklet_kill(&acrn_io_req_tasklet);
 	acrn_remove_intr_irq();
-	sysfs_remove_group(&acrn_device->kobj, &acrn_attr_group);
+	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 }
 

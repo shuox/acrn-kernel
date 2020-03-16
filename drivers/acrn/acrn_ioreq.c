@@ -10,6 +10,7 @@
  *
  */
 
+#include <asm/io.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/freezer.h>
