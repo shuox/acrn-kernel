@@ -2,14 +2,14 @@
 /**
  * @file acrn_drv.h
  *
- * ACRN HSM exported API for other modules.
+ * ACRN HSM exported API for other modules in host.
  */
 
-#ifndef _ACRN_DRV_H
-#define _ACRN_DRV_H
+#ifndef _ACRN_HOST_H
+#define _ACRN_HOST_H
 
 #include <linux/types.h>
-#include <linux/acrn/acrn_common_def.h>
+#include <linux/acrn.h>
 
 /**
  * acrn_mm_gpa2hva - convert guest physical address to host virtual address

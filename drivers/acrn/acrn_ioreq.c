@@ -21,8 +21,8 @@
 #include <linux/poll.h>
 #include <linux/delay.h>
 #include <linux/bitops.h>
-#include <linux/acrn/acrn_ioctl_defs.h>
-#include <linux/acrn/acrn_drv.h>
+#include <linux/acrn.h>
+#include <linux/acrn_host.h>
 
 #include <linux/idr.h>
 #include <linux/refcount.h>

@@ -24,8 +24,8 @@
 #include <linux/interrupt.h>
 #include <asm/acrn.h>
 #include <asm/hypervisor.h>
-#include <linux/acrn/acrn_ioctl_defs.h>
-#include <linux/acrn/acrn_drv.h>
+#include <linux/acrn.h>
+#include <linux/acrn_host.h>
 
 #include "acrn_hypercall.h"
 #include "acrn_drv_internal.h"
