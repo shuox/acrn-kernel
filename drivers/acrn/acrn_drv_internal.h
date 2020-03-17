@@ -57,7 +57,7 @@ struct region_mapping {
 
 struct wp_data {
 	/** set page write protect permission.
-	 *  true: set the wp; flase: clear the wp
+	 *  1: set the wp; 0: clear the wp
 	 */
 	u8 set;
 
@@ -132,14 +132,11 @@ int acrn_vm_destroy(struct acrn_vm *vm);
 struct acrn_vm *find_get_vm(unsigned short vmid);
 void get_vm(struct acrn_vm *vm);
 void put_vm(struct acrn_vm *vm);
-void free_guest_mem(struct acrn_vm *vm);
+
 int map_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap);
 int unmap_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap);
-int hugepage_map_guest(struct acrn_vm *vm, struct vm_memmap *memmap);
-void hugepage_free_guest(struct acrn_vm *vm);
-void *hugepage_map_guest_phys(struct acrn_vm *vm, u64 guest_phys, size_t size);
-int hugepage_unmap_guest_phys(struct acrn_vm *vm, u64 guest_phys);
-int set_memory_regions(struct map_regions *regions);
+int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap);
+void unmap_guest_all_ram(struct acrn_vm *vm);
 
 /**
  * @brief Info to set ioreq buffer for a created VM

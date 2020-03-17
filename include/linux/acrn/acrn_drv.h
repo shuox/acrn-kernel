@@ -12,34 +12,22 @@
 #include <linux/acrn/acrn_common_def.h>
 
 /**
- * acrn_map_guest_phys - map guest physical address to SOS kernel
- *			 virtual address
+ * acrn_mm_gpa2hva - convert guest physical address to host virtual address
  *
  * @vmid: guest vmid
- * @uos_phys: physical address in guest
+ * @guest_pa: physical address in guest
  * @size: the memory size mapped
  *
- * Return: SOS kernel virtual address, NULL on error
+ * Return: host kernel virtual address, NULL on error
  */
-extern void *acrn_map_guest_phys(unsigned short vmid, u64 uos_phys,
-				 size_t size);
+void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size);
 
 /**
- * acrn_unmap_guest_phys - unmap guest physical address
+ * acrn_mm_add_region - add a guest memory region
  *
- * @vmid: guest vmid
- * @uos_phys: physical address in guest
- *
- * Return: 0 on success, <0 for error.
- */
-extern int acrn_unmap_guest_phys(unsigned short vmid, u64 uos_phys);
-
-/**
- * acrn_add_memory_region - add a guest memory region
- *
- * @vmid: guest vmid
- * @gpa: gpa of UOS
- * @host_gpa: gpa of SOS
+ * @vmid: guest VM vmid
+ * @guest_pa: guest VM physical address
+ * @host_pa: host VM physical address
  * @size: memory region size
  * @mem_type: memory mapping type. Possible value could be:
  *                    MEM_TYPE_WB
@@ -55,34 +43,34 @@ extern int acrn_unmap_guest_phys(unsigned short vmid, u64 uos_phys);
  *
  * Return: 0 on success, <0 for error.
  */
-extern int acrn_add_memory_region(unsigned short vmid, unsigned long gpa,
-				  unsigned long host_gpa, unsigned long size,
-				  unsigned int mem_type,
-				  unsigned int mem_access_right);
+int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
+			   unsigned long host_pa, unsigned long size,
+			   unsigned int mem_type,
+			   unsigned int mem_access_right);
 
 /**
- * acrn_del_memory_region - delete a guest memory region
+ * acrn_mm_del_region - delete a guest memory region
  *
- * @vmid: guest vmid
- * @gpa: gpa of UOS
+ * @vmid: guest VM vmid
+ * @guest_pa: guest physical address
  * @size: memory region size
  *
  * Return: 0 on success, <0 for error.
  */
-extern int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
+int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
 			   unsigned long size);
 
 /**
- * write_protect_page - change one page write protection
+ * acrn_mm_page_wp - change one page write protection attr
  *
- * @vmid: guest vmid
- * @gpa: gpa in guest vmid
- * @enable_wp: enable/disable write protection of page on gpa
+ * @vmid: guest VM vmid
+ * @guest_pa: guest physical address
+ * @enable_wp: enable/disable write protection of the page on gpa
  *
  * Return: 0 on success, <0 for error.
  */
-extern int acrn_write_protect_page(unsigned short vmid, unsigned long gpa,
-				   bool enable_wp);
+int acrn_mm_page_wp(unsigned short vmid,
+		unsigned long guest_pa, bool enable_wp);
 
 /**
  * acrn_inject_msi() - inject MSI interrupt to guest
@@ -93,7 +81,7 @@ extern int acrn_write_protect_page(unsigned short vmid, unsigned long gpa,
  *
  * Return: 0 on success, <0 on error
  */
-extern int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
+int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
 			   unsigned long msi_data);
 
 

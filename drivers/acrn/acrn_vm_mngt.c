@@ -47,7 +47,7 @@ void get_vm(struct acrn_vm *vm)
 void put_vm(struct acrn_vm *vm)
 {
 	if (refcount_dec_and_test(&vm->refcnt)) {
-		free_guest_mem(vm);
+		unmap_guest_all_ram(vm);
 		if (vm->monitor_page) {
 			put_page(vm->monitor_page);
 			vm->monitor_page = NULL;

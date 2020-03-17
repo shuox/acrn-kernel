@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause
 /*
- * ACRN: memory map management for each VM
+ * ACRN: memory map management for guest VM
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Jason Chen CJ <jason.cj.chen@intel.com>
- * Zhao Yakui <yakui.zhao@intel.com>
- * Li Fei <lei1.li@intel.com>
- * Liu Shuo <shuo.a.liu@intel.com>
- *
+ * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
+ * 		Zhao Yakui <yakui.zhao@intel.com>
+ * 		Li Fei <lei1.li@intel.com>
+ * 		Liu Shuo A <shuo.a.liu@intel.com>
  */
 
 #include <linux/init.h>
@@ -29,19 +28,7 @@
 #include "acrn_drv_internal.h"
 #include "acrn_hypercall.h"
 
-int set_memory_regions(struct map_regions *regions)
-{
-	if (!regions)
-		return -EINVAL;
-
-	if (regions->mr_num > 0)
-		if (hcall_set_memory_regions(virt_to_phys(regions)) < 0)
-			return -EFAULT;
-
-	return 0;
-}
-
-static int set_memory_region(unsigned short vmid,
+static int modify_region(unsigned short vmid,
 		struct vm_memory_region *region)
 {
 	struct map_regions *regions;
@@ -55,10 +42,10 @@ static int set_memory_region(unsigned short vmid,
 	regions->mr_num = 1;
 	regions->regions_pa = virt_to_phys(region);
 
-	ret = set_memory_regions(regions);
+	ret = hcall_set_memory_regions(virt_to_phys(regions));
 	kfree(regions);
 	if (ret < 0) {
-		pr_err("acrn: Failed to set memory region for vm[%d]!\n",
+		pr_err("acrn: Failed to set memory region for VM[%d]!\n",
 		       vmid);
 		return -EFAULT;
 	}
@@ -66,8 +53,8 @@ static int set_memory_region(unsigned short vmid,
 	return 0;
 }
 
-int acrn_add_memory_region(unsigned short vmid, unsigned long gpa,
-			   unsigned long host_gpa, unsigned long size,
+int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
+			   unsigned long host_pa, unsigned long size,
 			   unsigned int mem_type, unsigned int mem_access_right)
 {
 	struct vm_memory_region *region;
@@ -78,19 +65,19 @@ int acrn_add_memory_region(unsigned short vmid, unsigned long gpa,
 		return -ENOMEM;
 
 	region->type = MR_ADD;
-	region->guest_vm_pa = gpa;
-	region->host_vm_pa = host_gpa;
+	region->guest_vm_pa = guest_pa;
+	region->host_vm_pa = host_pa;
 	region->size = size;
 	region->attr = ((mem_type & MEM_TYPE_MASK) |
 			(mem_access_right & MEM_ACCESS_RIGHT_MASK));
-	ret = set_memory_region(vmid, region);
+	ret = modify_region(vmid, region);
 
 	kfree(region);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(acrn_add_memory_region);
+EXPORT_SYMBOL_GPL(acrn_mm_add_region);
 
-int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
+int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
 			   unsigned long size)
 {
 	struct vm_memory_region *region;
@@ -101,20 +88,19 @@ int acrn_del_memory_region(unsigned short vmid, unsigned long gpa,
 		return -ENOMEM;
 
 	region->type = MR_DEL;
-	region->guest_vm_pa = gpa;
+	region->guest_vm_pa = guest_pa;
 	region->host_vm_pa = 0;
 	region->size = size;
 	region->attr = 0;
 
-	ret = set_memory_region(vmid, region);
+	ret = modify_region(vmid, region);
 
 	kfree(region);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(acrn_del_memory_region);
+EXPORT_SYMBOL_GPL(acrn_mm_del_region);
 
-int acrn_write_protect_page(unsigned short vmid,
-			    unsigned long gpa, bool enable_wp)
+int acrn_mm_page_wp(unsigned short vmid, unsigned long guest_pa, bool enable_wp)
 {
 	struct wp_data *wp;
 	int ret = 0;
@@ -124,35 +110,35 @@ int acrn_write_protect_page(unsigned short vmid,
 		return -ENOMEM;
 
 	wp->set = enable_wp ? 1 : 0;
-	wp->gpa = gpa;
+	wp->gpa = guest_pa;
 	ret = hcall_write_protect_page(vmid, virt_to_phys(wp));
 	kfree(wp);
 
 	if (ret < 0) {
-		return -EFAULT;
+		ret = -EFAULT;
 	}
 
-	return 0;
+	return ret;
 }
-EXPORT_SYMBOL_GPL(acrn_write_protect_page);
+EXPORT_SYMBOL_GPL(acrn_mm_page_wp);
 
 int map_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
-	/* hugetlb use vma to do the mapping */
+	/* system ram use vma to do the mapping */
 	if (memmap->type == VM_MEMMAP_SYSMEM)
-		return hugepage_map_guest(vm, memmap);
+		return map_guest_ram(vm, memmap);
 
 	/* mmio */
 	if (memmap->type != VM_MEMMAP_MMIO) {
-		pr_err("acrn: %s invalid memmap type: %d\n",
-		       __func__, memmap->type);
+		pr_err("acrn: Invalid memmap type: %d\n", memmap->type);
 		return -EINVAL;
 	}
 
-	if (acrn_add_memory_region(vm->vmid, memmap->guest_vm_pa,
+	if (acrn_mm_add_region(vm->vmid, memmap->guest_vm_pa,
 				   memmap->host_vm_pa, memmap->len,
 				   MEM_TYPE_UC, memmap->attr) < 0){
-		pr_err("acrn: failed to set memory region %d!\n", vm->vmid);
+		pr_err("acrn: Failed to add memory region for VM[%d]!\n",
+				vm->vmid);
 		return -EFAULT;
 	}
 
@@ -163,55 +149,190 @@ int unmap_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
 	/* only handle mmio */
 	if (memmap->type != VM_MEMMAP_MMIO) {
-		pr_err("hsm: %s invalid memmap type: %d for unmap\n",
-		       __func__, memmap->type);
+		pr_err("acrn: Invalid memmap type: %d\n", memmap->type);
 		return -EINVAL;
 	}
 
-	if (acrn_del_memory_region(vm->vmid, memmap->guest_vm_pa, memmap->len) < 0) {
-		pr_err("hsm: failed to del memory region %d!\n", vm->vmid);
+	if (acrn_mm_del_region(vm->vmid,
+			memmap->guest_vm_pa, memmap->len) < 0) {
+		pr_err("acrn: Failed to del memory region for VM[%d]!\n",
+				vm->vmid);
 		return -EFAULT;
 	}
 
 	return 0;
 }
 
-void free_guest_mem(struct acrn_vm *vm)
+static void *gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size)
 {
-	return hugepage_free_guest(vm);
+	int i;
+	struct region_mapping *region;
+	void *vaddr = NULL;
+
+	mutex_lock(&vm->regions_mapping_lock);
+	for (i = 0; i < vm->regions_mapping_count; i++) {
+		region = &vm->regions_mapping[i];
+		if (guest_pa < region->guest_vm_pa ||
+			guest_pa >= region->guest_vm_pa + region->size)
+			continue;
+		if (guest_pa + size > region->guest_vm_pa + region->size) {
+			pr_warn("acrn: VM[%d] gpa: 0x%lx, size %lx map fail!\n",
+					guest_pa, size);
+			break;
+		}
+		vaddr = region->host_vm_va + guest_pa - region->guest_vm_pa;
+	}
+	mutex_unlock(&vm->regions_mapping_lock);
+
+	return vaddr;
 }
 
-void *acrn_map_guest_phys(unsigned short vmid, u64 guest_phys, size_t size)
+void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size)
 {
 	struct acrn_vm *vm;
-	void *ret;
+	void *vaddr;
 
 	vm = find_get_vm(vmid);
 	if (!vm)
 		return NULL;
 
-	ret = hugepage_map_guest_phys(vm, guest_phys, size);
+	vaddr = gpa2hva(vm, guest_pa, size);
 
 	put_vm(vm);
 
-	return ret;
+	return vaddr;
 }
-EXPORT_SYMBOL_GPL(acrn_map_guest_phys);
+EXPORT_SYMBOL_GPL(acrn_mm_gpa2hva);
 
-int acrn_unmap_guest_phys(unsigned short vmid, u64 guest_phys)
+int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 {
-	struct acrn_vm *vm;
+	struct page **pages = NULL, *page;
+	int nr_pages, i = 0, order, nr_regions = 0;
+	struct vm_memory_region *vm_region;
+	struct map_regions *map_region_data;
+	struct region_mapping *region_mapping;
+	uint64_t guest_vm_pa;
+	void *remap_vaddr;
 	int ret;
 
-	vm = find_get_vm(vmid);
-	if (!vm) {
-		pr_warn("vm_list corrupted\n");
-		return -ESRCH;
+	if (!vm || !memmap)
+		return -EINVAL;
+
+	nr_pages = memmap->len >> PAGE_SHIFT;
+	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
+	if (!pages)
+		return -ENOMEM;
+	printk("lskakaxi, malloc pages[%llx], size[%llx] nr_pages[%d]\n",
+			pages, nr_pages * sizeof(struct page *), nr_pages);
+
+	ret = get_user_pages_fast(memmap->vma_base,
+			nr_pages, FOLL_WRITE, pages);
+	if (unlikely(ret != nr_pages)) {
+		pr_err("Failed to pin page for Guest VM!\n");
+		ret = -ENOMEM;
+		goto err_pin_pages;
 	}
 
-	ret = hugepage_unmap_guest_phys(vm, guest_phys);
+	/* record host va <-> guest pa mapping */
+	remap_vaddr = vm_map_ram(pages, nr_pages, -1, PAGE_KERNEL);
+	printk("lskakaxi, vm_map_ram remap_addr[%lx], nr_pages[%d]\n",
+			remap_vaddr, nr_pages);
+	if (!remap_vaddr) {
+		ret = -ENOMEM;
+		goto err_remap;
+	}
+	mutex_lock(&vm->regions_mapping_lock);
+	region_mapping = &vm->regions_mapping[vm->regions_mapping_count++];
+	if (vm->regions_mapping_count < ACRN_MAX_REGION_NUM) {
+		region_mapping->pages = pages;
+		region_mapping->npages = nr_pages;
+		region_mapping->size = memmap->len;
+		region_mapping->host_vm_va = remap_vaddr;
+		region_mapping->guest_vm_pa = memmap->guest_vm_pa;
+	} else
+		pr_warn("acrn: Run out of memory mapping slot!\n");
+	mutex_unlock(&vm->regions_mapping_lock);
 
-	put_vm(vm);
+	/* Calculate vm_memory_region number */
+	while (i < nr_pages) {
+		page = pages[i];
+		VM_BUG_ON_PAGE(PageTail(page), page);
+		order = compound_order(page);
+		nr_regions++;
+		i += 1 << order;
+	}
+	map_region_data = kzalloc(sizeof(struct map_regions) +
+			sizeof(*vm_region) * nr_regions, GFP_KERNEL);
+	printk("lskakaxi, malloc map_region_data[%llx], size[%llx], nr_regions[%d] \n",
+			map_region_data, sizeof(struct map_regions) + sizeof(*vm_region) * nr_regions, nr_regions);
+	if (!map_region_data) {
+		ret = -ENOMEM;
+		goto err_map_region_data;
+	}
+
+	vm_region = (struct vm_memory_region *)(map_region_data + 1);
+	map_region_data->vmid = vm->vmid;
+	map_region_data->mr_num = nr_regions;
+	map_region_data->regions_pa = virt_to_phys(vm_region);
+	guest_vm_pa = memmap->guest_vm_pa;
+	i = 0;
+	while (i < nr_pages) {
+		unsigned int region_size;
+		page = pages[i];
+		VM_BUG_ON_PAGE(PageTail(page), page);
+		order = compound_order(page);
+		region_size = PAGE_SIZE << order;
+		/* fill each memory region into region_array */
+		vm_region->type = MR_ADD;
+		vm_region->guest_vm_pa = guest_vm_pa;
+		vm_region->host_vm_pa = page_to_phys(page);
+		vm_region->size = region_size;
+		vm_region->attr = (MEM_TYPE_WB & MEM_TYPE_MASK) |
+				  (memmap->attr & MEM_ACCESS_RIGHT_MASK);
+
+		vm_region++;
+		guest_vm_pa += region_size;
+		i += 1 << order;
+	}
+
+	/* hypercall to ACRN to setup memory mapping */
+	ret = hcall_set_memory_regions(virt_to_phys(map_region_data));
+	if (ret < 0) {
+		pr_err("acrn: Failed to set regions! ret=%d\n", ret);
+		ret = -EFAULT;
+		goto err_set_region;
+	}
+
+	kfree(map_region_data);
+	return ret;
+
+err_set_region:
+	kfree(map_region_data);
+err_map_region_data:
+	mutex_lock(&vm->regions_mapping_lock);
+	vm->regions_mapping_count--;
+	mutex_unlock(&vm->regions_mapping_lock);
+	vm_unmap_ram(remap_vaddr, nr_pages);
+err_remap:
+	for (i = 0; i < nr_pages; i++)
+		put_page(pages[i]);
+err_pin_pages:
+	kfree(pages);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(acrn_unmap_guest_phys);
+
+void unmap_guest_all_ram(struct acrn_vm *vm)
+{
+	struct region_mapping *region_mapping;
+	int i, j;
+
+	mutex_lock(&vm->regions_mapping_lock);
+	for (i = 0; i < vm->regions_mapping_count; i++) {
+		region_mapping = &vm->regions_mapping[i];
+		for (j = 0; j < region_mapping->npages; j++) {
+			put_page(region_mapping->pages[j]);
+		}
+		kfree(region_mapping->pages);
+	}
+	mutex_unlock(&vm->regions_mapping_lock);
+}
