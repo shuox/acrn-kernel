@@ -3,8 +3,9 @@
  * ACRN hyperviosr service module (SRV): irqfd based on eventfd
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
- * Liu Shuo <shuo.a.liu@intel.com>
- * Zhao Yakui <yakui.zhao@intel.com>
+ *
+ * Authors:	Liu Shuo <shuo.a.liu@intel.com>
+ * 		Zhao Yakui <yakui.zhao@intel.com>
  */
 
 #include <linux/device.h>

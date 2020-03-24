@@ -3,18 +3,17 @@
  * ACRN hyperviosr service module (HSM): driver-specific hypercall
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
- * Jason Chen CJ <jason.cj.chen@intel.com>
- * Zhao Yakui <yakui.zhao@intel.com>
- * Jack Ren <jack.ren@intel.com>
- * Yin FengWei <fengwei.yin@intel.com>
- * Liu Shuo <shuo.a.liu@intel.com>
+ *
+ * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
+ * 		Zhao Yakui <yakui.zhao@intel.com>
+ * 		Jack Ren <jack.ren@intel.com>
+ * 		Yin FengWei <fengwei.yin@intel.com>
  */
 
 #include <linux/types.h>
 #include <asm/ptrace.h>
 #include <asm/acrn.h>
-#include "acrn_hv_defs.h"
-#include "acrn_hypercall.h"
+#include "hypercall.h"
 
 /* General */
 long hcall_get_api_version(unsigned long api_version)

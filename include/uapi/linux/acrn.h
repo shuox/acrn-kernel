@@ -226,7 +226,7 @@ struct acrn_create_vm {
 	/** Reserved */
 	uint16_t reserved0;
 
-	/** VCPU numbers this VM want to create */
+	/** VCPU numbers this VM */
 	uint16_t vcpu_num;
 
 	/** Reserved */
@@ -244,22 +244,6 @@ struct acrn_create_vm {
 	/** Reserved for future use*/
 	uint8_t  reserved2[16];
 };
-
-/**
- * @brief Info to create a VCPU
- *
- * the parameter for HC_CREATE_VCPU hypercall
- */
-struct acrn_create_vcpu {
-	/** the virtual CPU ID for the VCPU created */
-	uint16_t vcpu_id;
-
-	/** the physical CPU ID for the VCPU created */
-	uint16_t pcpu_id;
-
-	/** Reserved for future use*/
-	uint8_t reserved[4];
-} __aligned(8);
 
 struct acrn_gp_regs {
 	uint64_t rax;
@@ -488,7 +472,6 @@ struct acrn_irqfd {
 #define IC_DESTROY_VM                  _IC_ID(IC_ID, IC_ID_VM_BASE + 0x01)
 #define IC_START_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x02)
 #define IC_PAUSE_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x03)
-#define IC_CREATE_VCPU                 _IC_ID(IC_ID, IC_ID_VM_BASE + 0x04)
 #define IC_RESET_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x05)
 #define IC_SET_VCPU_REGS               _IC_ID(IC_ID, IC_ID_VM_BASE + 0x06)
 

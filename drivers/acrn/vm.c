@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause
+/*
+ * ACRN_HSM: VM management
+ *
+ * Copyright (C) 2019 Intel Corporation. All rights reserved.
+ *
+ * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
+ * 		Zhao Yakui <yakui.zhao@intel.com>
+ * 		Liu Shuo A <shuo.a.liu@intel.com>
+ */
+
+#include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/init.h>
+#include <linux/io.h>
+#include <linux/mm.h>
+#include <linux/rwlock_types.h>
+#include <linux/acrn.h>
+#include <linux/acrn_host.h>
+#include "acrn_drv.h"
+
+LIST_HEAD(acrn_vm_list);
+DEFINE_RWLOCK(acrn_vm_list_lock);
+
+struct acrn_vm *acrn_vm_id_get(uint16_t vmid)
+{
+	struct acrn_vm *vm;
+
+	read_lock_bh(&acrn_vm_list_lock);
+	list_for_each_entry(vm, &acrn_vm_list, list) {
+		if (vm->vmid == vmid) {
+			refcount_inc(&vm->refcnt);
+			read_unlock_bh(&acrn_vm_list_lock);
+			return vm;
+		}
+	}
+	read_unlock_bh(&acrn_vm_list_lock);
+	return NULL;
+}
+
+void acrn_vm_get(struct acrn_vm *vm)
+{
+	refcount_inc(&vm->refcnt);
+}
+
+void acrn_vm_put(struct acrn_vm *vm)
+{
+	if (refcount_dec_and_test(&vm->refcnt)) {
+		unmap_guest_all_ram(vm);
+		if (vm->monitor_page) {
+			put_page(vm->monitor_page);
+			vm->monitor_page = NULL;
+		}
+		if (vm->req_buf && vm->ioreq_page) {
+			put_page(vm->ioreq_page);
+			vm->ioreq_page = NULL;
+			vm->req_buf = NULL;
+		}
+		kfree(vm);
+		pr_debug("acrn: VM free\n");
+	}
+}
+
+void acrn_vm_register(struct acrn_vm *vm)
+{
+	write_lock_bh(&acrn_vm_list_lock);
+	list_add(&vm->list, &acrn_vm_list);
+	write_unlock_bh(&acrn_vm_list_lock);
+
+	refcount_set(&vm->refcnt, 1);
+}
+
+void acrn_vm_deregister(struct acrn_vm *vm)
+{
+	write_lock_bh(&acrn_vm_list_lock);
+	list_del_init(&vm->list);
+	write_unlock_bh(&acrn_vm_list_lock);
+	acrn_vm_put(vm);
+}
+
+struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
+		struct acrn_create_vm *vm_param)
+{
+	int ret;
+
+	ret = hcall_create_vm(virt_to_phys(vm_param));
+	if ((ret < 0) || (vm_param->vmid == ACRN_INVALID_VMID)) {
+		pr_err("acrn: failed to create VM by Hypervisor!\n");
+		return NULL;
+	}
+
+	if (acrn_ioreq_init(vm, vm_param->req_buf) < 0) {
+		hcall_destroy_vm(vm_param->vmid);
+		return NULL;
+	}
+
+	mutex_init(&vm->regions_mapping_lock);
+	INIT_LIST_HEAD(&vm->ioreq_client_list);
+	spin_lock_init(&vm->ioreq_client_lock);
+	vm->vmid = vm_param->vmid;
+	vm->vcpu_num = vm_param->vcpu_num;
+
+	write_lock_bh(&acrn_vm_list_lock);
+	list_add(&vm->list, &acrn_vm_list);
+	write_unlock_bh(&acrn_vm_list_lock);
+
+	acrn_ioeventfd_init(vm->vmid);
+	acrn_irqfd_init(vm->vmid);
+
+	pr_debug("acrn: VM %d created\n", vm->vmid);
+	return vm;
+}
+
+int acrn_vm_destroy(struct acrn_vm *vm)
+{
+	int ret;
+
+	/* Invalid VM or has been destroyed */
+	if (vm->vmid == ACRN_INVALID_VMID ||
+		test_and_set_bit(ACRN_VM_DESTROYED, &vm->flags))
+		return 0;
+
+	/* Remove from global vm list */
+	write_lock_bh(&acrn_vm_list_lock);
+	list_del_init(&vm->list);
+	write_unlock_bh(&acrn_vm_list_lock);
+
+	acrn_ioeventfd_deinit(vm->vmid);
+	acrn_irqfd_deinit(vm->vmid);
+	acrn_ioreq_deinit(vm);
+
+	unmap_guest_all_ram(vm);
+	if (vm->monitor_page) {
+		put_page(vm->monitor_page);
+		vm->monitor_page = NULL;
+	}
+
+	ret = hcall_destroy_vm(vm->vmid);
+	if (ret < 0) {
+		pr_warn("failed to destroy VM %d\n", vm->vmid);
+		clear_bit(ACRN_VM_DESTROYED, &vm->flags);
+		return -EFAULT;
+	}
+	vm->vmid = ACRN_INVALID_VMID;
+	return 0;
+}
+
+int acrn_inject_msi(uint16_t vmid, unsigned long msi_addr,
+		unsigned long msi_data)
+{
+	struct acrn_msi_entry *msi;
+	int ret;
+
+	/* might be used in interrupt context, so use GFP_ATOMIC */
+	msi = kzalloc(sizeof(*msi), GFP_ATOMIC);
+	if (!msi)
+		return -ENOMEM;
+
+	/* msi_addr: addr[19:12] with dest vcpu id */
+	/* msi_data: data[7:0] with vector */
+	msi->msi_addr = msi_addr;
+	msi->msi_data = msi_data;
+	ret = hcall_inject_msi(vmid, virt_to_phys(msi));
+	kfree(msi);
+	if (ret < 0) {
+		pr_err("acrn: failed to inject MSI for vmid %d, msi_addr %lx msi_data%lx!\n",
+				vmid, msi_addr, msi_data);
+		return -EFAULT;
+	}
+	return 0;
+}

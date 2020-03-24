@@ -20,7 +20,7 @@
  *
  * Return: host kernel virtual address, NULL on error
  */
-void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size);
+extern void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size);
 
 /**
  * acrn_mm_add_region - add a guest memory region
@@ -43,7 +43,7 @@ void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size);
  *
  * Return: 0 on success, <0 for error.
  */
-int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
+extern int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
 			   unsigned long host_pa, unsigned long size,
 			   unsigned int mem_type,
 			   unsigned int mem_access_right);
@@ -57,8 +57,8 @@ int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
  *
  * Return: 0 on success, <0 for error.
  */
-int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
-			   unsigned long size);
+extern int acrn_mm_del_region(unsigned short vmid,
+		unsigned long guest_pa, unsigned long size);
 
 /**
  * acrn_mm_page_wp - change one page write protection attr
@@ -69,7 +69,7 @@ int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
  *
  * Return: 0 on success, <0 for error.
  */
-int acrn_mm_page_wp(unsigned short vmid,
+extern int acrn_mm_page_wp(unsigned short vmid,
 		unsigned long guest_pa, bool enable_wp);
 
 /**
@@ -81,8 +81,8 @@ int acrn_mm_page_wp(unsigned short vmid,
  *
  * Return: 0 on success, <0 on error
  */
-int acrn_inject_msi(unsigned short vmid, unsigned long msi_addr,
-			   unsigned long msi_data);
+int acrn_inject_msi(unsigned short vmid,
+		unsigned long msi_addr, unsigned long msi_data);
 
 
 /* the API related with emulated mmio ioreq */

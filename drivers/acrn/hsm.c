@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause
 /*
- * ACRN hyperviosr service module (HSM): main framework
+ * ACRN hyperviosr service module (HSM)
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Liu Shuo <shuo.a.liu@intel.com>
- * Zhao Yakui <yakui.zhao@intel.com>
+ * Authors:	Liu Shuo A <shuo.a.liu@intel.com>
+ * 		Zhao Yakui <yakui.zhao@intel.com>
  */
 
 #include <linux/bits.h>
@@ -26,114 +26,68 @@
 #include <asm/hypervisor.h>
 #include <linux/acrn.h>
 #include <linux/acrn_host.h>
+#include "acrn_drv.h"
 
-#include "acrn_hypercall.h"
-#include "acrn_drv_internal.h"
-
-#define	DEVICE_NAME	"acrn_hsm"
-
+#define SUPPORT_HV_API_VERSION_MAJOR	1
+#define SUPPORT_HV_API_VERSION_MINOR	0
 static struct api_version acrn_api_version;
-static struct tasklet_struct acrn_io_req_tasklet;
 
-static
-int acrn_dev_open(struct inode *inodep, struct file *filep)
+static int acrn_dev_open(struct inode *inodep, struct file *filep)
 {
-	struct acrn_vm *vm;
-
 	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
 	if (!vm)
-		return -ENOMEM;
+		return NULL;
 
-	refcount_set(&vm->refcnt, 1);
 	vm->vmid = ACRN_INVALID_VMID;
-
-	mutex_init(&vm->regions_mapping_lock);
-
-	INIT_LIST_HEAD(&vm->ioreq_client_list);
-	spin_lock_init(&vm->ioreq_client_lock);
-
-	write_lock_bh(&acrn_vm_list_lock);
-	vm_list_add(&vm->list);
-	write_unlock_bh(&acrn_vm_list_lock);
 	filep->private_data = vm;
-
-	pr_info("%s: opening device node\n", __func__);
 	return 0;
 }
 
-static
-long acrn_dev_ioctl(struct file *filep,
-		    unsigned int ioctl_num, unsigned long ioctl_param)
+static long acrn_dev_ioctl(struct file *filep,
+		    unsigned int cmd, unsigned long ioctl_param)
 {
 	struct acrn_vm *vm;
 	int ret = 0;
 
 	vm = (struct acrn_vm *)filep->private_data;
-	if (!vm) {
-		pr_err("acrn: invalid VM !\n");
-		return -EFAULT;
-	}
- 
-	if (ioctl_num == IC_GET_API_VERSION) {
+	if (cmd == IC_GET_API_VERSION) {
 		if (copy_to_user((void __user *)ioctl_param, &acrn_api_version,
 				 sizeof(acrn_api_version)))
 			return -EFAULT;
 		return 0;
 	}
 
-	if ((vm->vmid == ACRN_INVALID_VMID) && (ioctl_num != IC_CREATE_VM)) {
-		pr_err("acrn: invalid VM ID for IOCTL %x!\n", ioctl_num);
+	if ((vm->vmid == ACRN_INVALID_VMID) && (cmd != IC_CREATE_VM)) {
+		pr_err("acrn: invalid VM ID for IOCTL %x!\n", cmd);
 		return -EFAULT;
 	}
 
-	switch (ioctl_num) {
-	case IC_CREATE_VM: {
-		struct acrn_create_vm *created_vm;
+	switch (cmd) {
+	case IC_CREATE_VM:
+		struct acrn_create_vm *vm_param;
 
-		created_vm = kmalloc(sizeof(*created_vm), GFP_KERNEL);
-		if (!created_vm)
+		vm_param = kmalloc(sizeof(*vm_param), GFP_KERNEL);
+		if (!vm_param)
 			return -ENOMEM;
 
-		if (copy_from_user(created_vm, (void __user *)ioctl_param,
+		if (copy_from_user(vm_param, (void __user *)ioctl_param,
 				   sizeof(struct acrn_create_vm))) {
-			kfree(created_vm);
-			return -EFAULT;
+			ret = -EFAULT;
+			goto err_create_vm;
 		}
 
-		ret = hcall_create_vm(virt_to_phys(created_vm));
-		if ((ret < 0) || (created_vm->vmid == ACRN_INVALID_VMID)) {
-			pr_err("acrn: failed to create VM from Hypervisor !\n");
-			kfree(created_vm);
-			return -EFAULT;
+		vm = acrn_vm_create(vm_param);
+		if (!vm) {
+			ret = -EFAULT;
+			goto err_create_vm;
 		}
 
-		if (copy_to_user((void __user *)ioctl_param, created_vm,
-				 sizeof(struct acrn_create_vm))) {
-			kfree(created_vm);
-			return -EFAULT;
-		}
-
-		vm->vmid = created_vm->vmid;
-		atomic_set(&vm->vcpu_num, 0);
-
-		ret = acrn_ioreq_init(vm, created_vm->req_buf);
-		if (ret < 0)
-			goto ioreq_buf_fail;
-
-		acrn_ioeventfd_init(vm->vmid);
-		acrn_irqfd_init(vm->vmid);
-		pr_debug("acrn: VM %d created\n", created_vm->vmid);
-		kfree(created_vm);
+		if (copy_to_user((void __user *)ioctl_param, vm_param,
+				 sizeof(struct acrn_create_vm)))
+			ret = -EFAULT;
+err_create_vm:
+		kfree(vm_param);
 		break;
-
-ioreq_buf_fail:
-		hcall_destroy_vm(created_vm->vmid);
-		vm->vmid = ACRN_INVALID_VMID;
-		kfree(created_vm);
-		break;
-
-	}
-
 	case IC_START_VM: {
 		ret = hcall_start_vm(vm->vmid);
 		if (ret < 0) {
@@ -161,11 +115,9 @@ ioreq_buf_fail:
 		break;
 	}
 
-	case IC_DESTROY_VM: {
+	case IC_DESTROY_VM:
 		ret = acrn_vm_destroy(vm);
 		break;
-	}
-
 	case IC_CREATE_VCPU: {
 		struct acrn_create_vcpu *cv;
 
@@ -239,10 +191,10 @@ ioreq_buf_fail:
 	}
 
 	case IC_ASSIGN_PTDEV: {
-		unsigned short bdf;
+		uint16_t bdf;
 
-		if (copy_from_user(&bdf, (void __user *)ioctl_param,
-				   sizeof(unsigned short)))
+		if (copy_from_user(&bdf,
+				(void __user *)ioctl_param, sizeof(uint16_t)))
 			return -EFAULT;
 
 		ret = hcall_assign_ptdev(vm->vmid, bdf);
@@ -253,10 +205,10 @@ ioreq_buf_fail:
 		break;
 	}
 	case IC_DEASSIGN_PTDEV: {
-		unsigned short bdf;
+		uint16_t bdf;
 
-		if (copy_from_user(&bdf, (void __user *)ioctl_param,
-				   sizeof(unsigned short)))
+		if (copy_from_user(&bdf,
+				(void __user *)ioctl_param, sizeof(uint16_t )))
 			return -EFAULT;
 
 		ret = hcall_deassign_ptdev(vm->vmid, bdf);
@@ -364,8 +316,7 @@ ioreq_buf_fail:
 	case IC_CREATE_IOREQ_CLIENT: {
 		int client_id;
 
-		client_id = acrn_ioreq_create_fallback_client(vm->vmid,
-							      "acrndm");
+		client_id = acrn_ioreq_create_default_client(vm->vmid, "acrndm");
 		if (client_id < 0)
 			return -EFAULT;
 		return client_id;
@@ -522,60 +473,22 @@ static int acrn_dev_release(struct inode *inodep, struct file *filep)
 {
 	struct acrn_vm *vm = filep->private_data;
 
-	if (!vm) {
-		pr_err("acrn: invalid VM !\n");
-		return -EFAULT;
-	}
-	if (vm->vmid != ACRN_INVALID_VMID)
-		acrn_vm_destroy(vm);
-
-	write_lock_bh(&acrn_vm_list_lock);
-	list_del_init(&vm->list);
-	write_unlock_bh(&acrn_vm_list_lock);
-
-	put_vm(vm);
-	filep->private_data = NULL;
- 
+	acrn_vm_destroy(vm);
+	kfree(vm);
 	return 0;
 }
 
-static void io_req_tasklet(unsigned long data)
-{
-	struct acrn_vm *vm;
-	/* This is already in tasklet. Use read_lock for list_lock */
-
-	read_lock(&acrn_vm_list_lock);
-	list_for_each_entry(vm, &acrn_vm_list, list) {
-		if (!vm || !vm->req_buf)
-			break;
-
-		get_vm(vm);
-		acrn_ioreq_distribute_request(vm);
-		put_vm(vm);
-	}
-	read_unlock(&acrn_vm_list_lock);
-}
-
-static void acrn_intr_handler(void)
-{
-	tasklet_schedule(&acrn_io_req_tasklet);
-}
-
-static const struct file_operations fops = {
+static const struct file_operations acrn_fops = {
 	.open = acrn_dev_open,
 	.release = acrn_dev_release,
 	.unlocked_ioctl = acrn_dev_ioctl,
-	.poll = acrn_dev_poll,
 };
 
 static struct miscdevice acrn_dev = {
 	.minor	= MISC_DYNAMIC_MINOR,
 	.name	= "acrn_hsm",
-	.fops	= &fops,
+	.fops	= &acrn_fops,
 };
-
-#define SUPPORT_HV_API_VERSION_MAJOR	1
-#define SUPPORT_HV_API_VERSION_MINOR	0
 
 static ssize_t
 offline_cpu_store(struct device *dev,
@@ -612,10 +525,9 @@ static struct attribute_group acrn_attr_group = {
 	.attrs = acrn_attrs,
 };
 
-static int __init acrn_init(void)
+static int __init hsm_init(void)
 {
 	int ret;
-	unsigned long flag;
 
 	if (x86_hyper_type != X86_HYPER_ACRN)
 		return -ENODEV;
@@ -625,13 +537,13 @@ static int __init acrn_init(void)
 
 	memset(&acrn_api_version, 0, sizeof(acrn_api_version));
 	if (hcall_get_api_version(slow_virt_to_phys(&acrn_api_version)) < 0) {
-		pr_err("acrn: failed to get api version from Hypervisor !\n");
+		pr_err("acrn: Failed to get API version from hypervisor!\n");
 		return -EINVAL;
 	}
 
 	if (acrn_api_version.major_version >= SUPPORT_HV_API_VERSION_MAJOR &&
 	    acrn_api_version.minor_version >= SUPPORT_HV_API_VERSION_MINOR) {
-		pr_info("ACRN: hv api version %d.%d\n",
+		pr_info("acrn: API version is %d.%d\n",
 			acrn_api_version.major_version,
 			acrn_api_version.minor_version);
 	} else {
@@ -643,7 +555,7 @@ static int __init acrn_init(void)
 
 	ret = misc_register(&acrn_dev);
 	if (ret) {
-		pr_err("Can't register acrn as misc dev\n");
+		pr_err("acrn: Create misc dev failed!\n");
 		return ret;
 	}
 
@@ -653,27 +565,19 @@ static int __init acrn_init(void)
 		return -EINVAL;
 	}
 
-	tasklet_init(&acrn_io_req_tasklet, io_req_tasklet, 0);
-	local_irq_save(flag);
-	acrn_setup_intr_irq(acrn_intr_handler);
-	local_irq_restore(flag);
-	acrn_ioreq_driver_init();
-
 	return 0;
 }
 
-static void __exit acrn_exit(void)
+static void __exit hsm_exit(void)
 {
-	tasklet_kill(&acrn_io_req_tasklet);
 	acrn_remove_intr_irq();
 	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 }
 
-module_init(acrn_init);
-module_exit(acrn_exit);
+module_init(hsm_init);
+module_exit(hsm_exit);
 
-MODULE_AUTHOR("Intel");
-MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("This is a skeleton char device driver for ACRN\n");
-MODULE_VERSION("0.1");
+MODULE_AUTHOR("Intel Corporation");
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("ACRN hyperviosr service module(HSM)");
