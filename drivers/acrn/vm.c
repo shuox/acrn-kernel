@@ -22,62 +22,6 @@
 LIST_HEAD(acrn_vm_list);
 DEFINE_RWLOCK(acrn_vm_list_lock);
 
-struct acrn_vm *acrn_vm_id_get(uint16_t vmid)
-{
-	struct acrn_vm *vm;
-
-	read_lock_bh(&acrn_vm_list_lock);
-	list_for_each_entry(vm, &acrn_vm_list, list) {
-		if (vm->vmid == vmid) {
-			refcount_inc(&vm->refcnt);
-			read_unlock_bh(&acrn_vm_list_lock);
-			return vm;
-		}
-	}
-	read_unlock_bh(&acrn_vm_list_lock);
-	return NULL;
-}
-
-void acrn_vm_get(struct acrn_vm *vm)
-{
-	refcount_inc(&vm->refcnt);
-}
-
-void acrn_vm_put(struct acrn_vm *vm)
-{
-	if (refcount_dec_and_test(&vm->refcnt)) {
-		unmap_guest_all_ram(vm);
-		if (vm->monitor_page) {
-			put_page(vm->monitor_page);
-			vm->monitor_page = NULL;
-		}
-		if (vm->req_buf && vm->ioreq_page) {
-			put_page(vm->ioreq_page);
-			vm->ioreq_page = NULL;
-			vm->req_buf = NULL;
-		}
-		kfree(vm);
-		pr_debug("acrn: VM free\n");
-	}
-}
-
-void acrn_vm_register(struct acrn_vm *vm)
-{
-	write_lock_bh(&acrn_vm_list_lock);
-	list_add(&vm->list, &acrn_vm_list);
-	write_unlock_bh(&acrn_vm_list_lock);
-
-	refcount_set(&vm->refcnt, 1);
-}
-
-void acrn_vm_deregister(struct acrn_vm *vm)
-{
-	write_lock_bh(&acrn_vm_list_lock);
-	list_del_init(&vm->list);
-	write_unlock_bh(&acrn_vm_list_lock);
-	acrn_vm_put(vm);
-}
-
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 		struct acrn_create_vm *vm_param)
 {
@@ -95,8 +39,8 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 	}
 
 	mutex_init(&vm->regions_mapping_lock);
-	INIT_LIST_HEAD(&vm->ioreq_client_list);
-	spin_lock_init(&vm->ioreq_client_lock);
+	INIT_LIST_HEAD(&vm->ioreq_clients);
+	spin_lock_init(&vm->ioreq_clients_lock);
 	vm->vmid = vm_param->vmid;
 	vm->vcpu_num = vm_param->vcpu_num;
 
@@ -104,8 +48,8 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 	list_add(&vm->list, &acrn_vm_list);
 	write_unlock_bh(&acrn_vm_list_lock);
 
-	acrn_ioeventfd_init(vm->vmid);
-	acrn_irqfd_init(vm->vmid);
+	acrn_ioeventfd_init(vm);
+	acrn_irqfd_init(vm);
 
 	pr_debug("acrn: VM %d created\n", vm->vmid);
 	return vm;
@@ -125,8 +69,8 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	list_del_init(&vm->list);
 	write_unlock_bh(&acrn_vm_list_lock);
 
-	acrn_ioeventfd_deinit(vm->vmid);
-	acrn_irqfd_deinit(vm->vmid);
+	acrn_ioeventfd_deinit(vm);
+	acrn_irqfd_deinit(vm);
 	acrn_ioreq_deinit(vm);
 
 	unmap_guest_all_ram(vm);

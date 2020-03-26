@@ -21,12 +21,8 @@
 #include <linux/list.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
-
 #include <linux/acrn.h>
-#include <linux/acrn_host.h>
-
-#include "acrn_drv_internal.h"
-#include "acrn_hypercall.h"
+#include "acrn_drv.h"
 
 static int modify_region(unsigned short vmid,
 		struct vm_memory_region *region)
@@ -163,7 +159,7 @@ int unmap_guest_memseg(struct acrn_vm *vm, struct vm_memmap *memmap)
 	return 0;
 }
 
-static void *gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size)
+void *acrn_mm_gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size)
 {
 	int i;
 	struct region_mapping *region;
@@ -177,28 +173,12 @@ static void *gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size)
 			continue;
 		if (guest_pa + size > region->guest_vm_pa + region->size) {
 			pr_warn("acrn: VM[%d] gpa: 0x%lx, size %lx map fail!\n",
-					guest_pa, size);
+					vm->vmid, guest_pa, size);
 			break;
 		}
 		vaddr = region->host_vm_va + guest_pa - region->guest_vm_pa;
 	}
 	mutex_unlock(&vm->regions_mapping_lock);
-
-	return vaddr;
-}
-
-void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size)
-{
-	struct acrn_vm *vm;
-	void *vaddr;
-
-	vm = find_get_vm(vmid);
-	if (!vm)
-		return NULL;
-
-	vaddr = gpa2hva(vm, guest_pa, size);
-
-	put_vm(vm);
 
 	return vaddr;
 }

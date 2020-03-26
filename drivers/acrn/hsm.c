@@ -4,8 +4,8 @@
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Authors:	Liu Shuo A <shuo.a.liu@intel.com>
- * 		Zhao Yakui <yakui.zhao@intel.com>
+ * Authors:	Shuo A Liu <shuo.a.liu@intel.com>
+ * 		Yakui Zhao <yakui.zhao@intel.com>
  */
 
 #include <linux/bits.h>
@@ -34,9 +34,11 @@ static struct api_version acrn_api_version;
 
 static int acrn_dev_open(struct inode *inodep, struct file *filep)
 {
+	struct acrn_vm *vm;
+
 	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
 	if (!vm)
-		return NULL;
+		return -ENOMEM;
 
 	vm->vmid = ACRN_INVALID_VMID;
 	filep->private_data = vm;
@@ -47,6 +49,17 @@ static long acrn_dev_ioctl(struct file *filep,
 		    unsigned int cmd, unsigned long ioctl_param)
 {
 	struct acrn_vm *vm;
+	struct acrn_create_vm *vm_param;
+	struct vm_memmap memmap;
+	struct acrn_set_vcpu_regs *cpu_regs;
+	struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
+	struct acrn_msi_entry *msi;
+	struct ioreq_notify notify;
+	struct acrn_ioeventfd ioeventfd;
+	struct acrn_irqfd irqfd;
+	struct page *page;
+	u64 cstate_cmd;
+	uint16_t bdf;
 	int ret = 0;
 
 	vm = (struct acrn_vm *)filep->private_data;
@@ -64,8 +77,6 @@ static long acrn_dev_ioctl(struct file *filep,
 
 	switch (cmd) {
 	case IC_CREATE_VM:
-		struct acrn_create_vm *vm_param;
-
 		vm_param = kmalloc(sizeof(*vm_param), GFP_KERNEL);
 		if (!vm_param)
 			return -ENOMEM;
@@ -76,7 +87,7 @@ static long acrn_dev_ioctl(struct file *filep,
 			goto err_create_vm;
 		}
 
-		vm = acrn_vm_create(vm_param);
+		vm = acrn_vm_create(vm, vm_param);
 		if (!vm) {
 			ret = -EFAULT;
 			goto err_create_vm;
@@ -88,65 +99,31 @@ static long acrn_dev_ioctl(struct file *filep,
 err_create_vm:
 		kfree(vm_param);
 		break;
-	case IC_START_VM: {
+	case IC_START_VM:
 		ret = hcall_start_vm(vm->vmid);
 		if (ret < 0) {
-			pr_err("acrn: failed to start VM %d!\n", vm->vmid);
-			return -EFAULT;
+			pr_err("acrn: Failed to start VM %d!\n", vm->vmid);
+			ret = -EFAULT;
 		}
 		break;
-	}
-
-	case IC_PAUSE_VM: {
+	case IC_PAUSE_VM:
 		ret = hcall_pause_vm(vm->vmid);
 		if (ret < 0) {
-			pr_err("acrn: failed to pause VM %d!\n", vm->vmid);
-			return -EFAULT;
+			pr_err("acrn: Failed to pause VM %d!\n", vm->vmid);
+			ret = -EFAULT;
 		}
 		break;
-	}
-
-	case IC_RESET_VM: {
+	case IC_RESET_VM:
 		ret = hcall_reset_vm(vm->vmid);
 		if (ret < 0) {
-			pr_err("acrn: failed to restart VM %d!\n", vm->vmid);
-			return -EFAULT;
+			pr_err("acrn: Failed to restart VM %d!\n", vm->vmid);
+			ret = -EFAULT;
 		}
 		break;
-	}
-
 	case IC_DESTROY_VM:
 		ret = acrn_vm_destroy(vm);
 		break;
-	case IC_CREATE_VCPU: {
-		struct acrn_create_vcpu *cv;
-
-		cv = kmalloc(sizeof(*cv), GFP_KERNEL);
-		if (!cv)
-			return -ENOMEM;
-
-		if (copy_from_user(cv, (void __user *)ioctl_param,
-				   sizeof(struct acrn_create_vcpu))) {
-			kfree(cv);
-			return -EFAULT;
-		}
-
-		ret = hcall_create_vcpu(vm->vmid, virt_to_phys(cv));
-		if (ret < 0) {
-			pr_err("acrn: failed to create vcpu %d for VM %d!\n",
-			       cv->vcpu_id, vm->vmid);
-			kfree(cv);
-			return -EFAULT;
-		}
-		atomic_inc(&vm->vcpu_num);
-		kfree(cv);
-
-		return ret;
-	}
-
-	case IC_SET_VCPU_REGS: {
-		struct acrn_set_vcpu_regs *cpu_regs;
-
+	case IC_SET_VCPU_REGS:
 		cpu_regs = kmalloc(sizeof(*cpu_regs), GFP_KERNEL);
 		if (!cpu_regs)
 			return -ENOMEM;
@@ -160,53 +137,37 @@ err_create_vm:
 		ret = hcall_set_vcpu_regs(vm->vmid, virt_to_phys(cpu_regs));
 		kfree(cpu_regs);
 		if (ret < 0) {
-			pr_err("acrn: failed to set bsp state of vm %d!\n",
+			pr_err("acrn: Failed to set regs state of vm %d!\n",
 			       vm->vmid);
 			return -EFAULT;
 		}
-
-		return ret;
-	}
-
-	case IC_SET_MEMSEG: {
-		struct vm_memmap memmap;
-
+		break;
+	case IC_SET_MEMSEG:
 		if (copy_from_user(&memmap, (void __user *)ioctl_param,
 				   sizeof(memmap)))
 			return -EFAULT;
 
 		ret = map_guest_memseg(vm, &memmap);
 		break;
-	}
-
-	case IC_UNSET_MEMSEG: {
-		struct vm_memmap memmap;
-
+	case IC_UNSET_MEMSEG:
 		if (copy_from_user(&memmap, (void __user *)ioctl_param,
 				   sizeof(memmap)))
 			return -EFAULT;
 
 		ret = unmap_guest_memseg(vm, &memmap);
 		break;
-	}
-
-	case IC_ASSIGN_PTDEV: {
-		uint16_t bdf;
-
+	case IC_ASSIGN_PTDEV:
 		if (copy_from_user(&bdf,
 				(void __user *)ioctl_param, sizeof(uint16_t)))
 			return -EFAULT;
 
 		ret = hcall_assign_ptdev(vm->vmid, bdf);
 		if (ret < 0) {
-			pr_err("acrn: failed to assign ptdev!\n");
+			pr_err("acrn: Failed to assign ptdev!\n");
 			return -EFAULT;
 		}
 		break;
-	}
-	case IC_DEASSIGN_PTDEV: {
-		uint16_t bdf;
-
+	case IC_DEASSIGN_PTDEV:
 		if (copy_from_user(&bdf,
 				(void __user *)ioctl_param, sizeof(uint16_t )))
 			return -EFAULT;
@@ -217,11 +178,7 @@ err_create_vm:
 			return -EFAULT;
 		}
 		break;
-	}
-
-	case IC_SET_PTDEV_INTR_INFO: {
-		struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
-
+	case IC_SET_PTDEV_INTR_INFO:
 		if (copy_from_user(&ic_pt_irq, (void __user *)ioctl_param,
 				   sizeof(ic_pt_irq)))
 			return -EFAULT;
@@ -237,12 +194,8 @@ err_create_vm:
 			pr_err("acrn: failed to set intr info for ptdev!\n");
 			return -EFAULT;
 		}
-
 		break;
-	}
-	case IC_RESET_PTDEV_INTR_INFO: {
-		struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
-
+	case IC_RESET_PTDEV_INTR_INFO:
 		if (copy_from_user(&ic_pt_irq, (void __user *)ioctl_param,
 				   sizeof(ic_pt_irq)))
 			return -EFAULT;
@@ -259,20 +212,14 @@ err_create_vm:
 			return -EFAULT;
 		}
 		break;
-	}
-
-	case IC_SET_IRQLINE: {
+	case IC_SET_IRQLINE:
 		ret = hcall_set_irqline(vm->vmid, ioctl_param);
 		if (ret < 0) {
 			pr_err("acrn: failed to set irqline!\n");
 			return -EFAULT;
 		}
 		break;
-	}
-
-	case IC_INJECT_MSI: {
-		struct acrn_msi_entry *msi;
-
+	case IC_INJECT_MSI:
 		msi = kmalloc(sizeof(*msi), GFP_KERNEL);
 		if (!msi)
 			return -ENOMEM;
@@ -290,11 +237,7 @@ err_create_vm:
 			return -EFAULT;
 		}
 		break;
-	}
-
-	case IC_VM_INTR_MONITOR: {
-		struct page *page;
-
+	case IC_VM_INTR_MONITOR:
 		ret = get_user_pages_fast(ioctl_param, 1, 1, &page);
 		if (unlikely(ret != 1)) {
 			pr_err("acrn-dev: failed to pin intr hdr buffer!\n");
@@ -311,65 +254,34 @@ err_create_vm:
 			put_page(vm->monitor_page);
 		vm->monitor_page = page;
 		break;
-	}
-
-	case IC_CREATE_IOREQ_CLIENT: {
-		int client_id;
-
-		client_id = acrn_ioreq_create_default_client(vm->vmid, "acrndm");
-		if (client_id < 0)
-			return -EFAULT;
-		return client_id;
-	}
-
-	case IC_DESTROY_IOREQ_CLIENT: {
-		int client = ioctl_param;
-
-		acrn_ioreq_destroy_client(client);
+	case IC_CREATE_IOREQ_CLIENT:
+		if (!acrn_ioreq_create_client(vm, NULL, NULL, true, "acrndm"))
+			ret = -EFAULT;
 		break;
-	}
-
-	case IC_ATTACH_IOREQ_CLIENT: {
-		int client = ioctl_param;
-
-		return acrn_ioreq_attach_client(client);
-	}
-
-	case IC_NOTIFY_REQUEST_FINISH: {
-		struct ioreq_notify notify;
-
+	case IC_DESTROY_IOREQ_CLIENT:
+		acrn_ioreq_destroy_client(get_default_client(vm));
+		break;
+	case IC_ATTACH_IOREQ_CLIENT:
+		acrn_ioreq_attach_client(get_default_client(vm));
+		break;
+	case IC_NOTIFY_REQUEST_FINISH:
 		if (copy_from_user(&notify, (void __user *)ioctl_param,
 				   sizeof(notify)))
 			return -EFAULT;
-
-		ret = acrn_ioreq_complete_request(notify.client_id,
-						  notify.vcpu, NULL);
+		ret = acrn_ioreq_complete_request(get_default_client(vm),
+						notify.vcpu, NULL);
 		if (ret < 0)
 			return -EFAULT;
 		break;
-	}
-	case IC_CLEAR_VM_IOREQ: {
-		/*
-		 * we need to flush the current pending ioreq dispatch
-		 * tasklet and finish it before clearing all ioreq of this VM.
-		 * With tasklet_kill, there still be a very rare race which
-		 * might lost one ioreq tasklet for other VMs. So arm one after
-		 * the clearing. It's harmless.
-		 */
-		tasklet_schedule(&acrn_io_req_tasklet);
-		tasklet_kill(&acrn_io_req_tasklet);
-		tasklet_schedule(&acrn_io_req_tasklet);
+	case IC_CLEAR_VM_IOREQ:
 		acrn_ioreq_clear_request(vm);
 		break;
-	}
-
-	case IC_PM_GET_CPU_STATE: {
-		u64 cmd;
-
-		if (copy_from_user(&cmd, (void *)ioctl_param, sizeof(cmd)))
+	case IC_PM_GET_CPU_STATE:
+		if (copy_from_user(&cstate_cmd,
+				(void *)ioctl_param, sizeof(cstate_cmd)))
 			return -EFAULT;
 
-		switch (cmd & PMCMD_TYPE_MASK) {
+		switch (cstate_cmd & PMCMD_TYPE_MASK) {
 		case PMCMD_GET_PX_CNT:
 		case PMCMD_GET_CX_CNT: {
 			u64 *pm_info;
@@ -378,7 +290,7 @@ err_create_vm:
 			if (!pm_info)
 				return -ENOMEM;
 
-			ret = hcall_get_cpu_state(cmd, virt_to_phys(pm_info));
+			ret = hcall_get_cpu_state(cstate_cmd, virt_to_phys(pm_info));
 			if (ret < 0) {
 				kfree(pm_info);
 				return -EFAULT;
@@ -398,7 +310,7 @@ err_create_vm:
 			if (!px_data)
 				return -ENOMEM;
 
-			ret = hcall_get_cpu_state(cmd, virt_to_phys(px_data));
+			ret = hcall_get_cpu_state(cstate_cmd, virt_to_phys(px_data));
 			if (ret < 0) {
 				kfree(px_data);
 				return -EFAULT;
@@ -418,7 +330,7 @@ err_create_vm:
 			if (!cx_data)
 				return -ENOMEM;
 
-			ret = hcall_get_cpu_state(cmd, virt_to_phys(cx_data));
+			ret = hcall_get_cpu_state(cstate_cmd, virt_to_phys(cx_data));
 			if (ret < 0) {
 				kfree(cx_data);
 				return -EFAULT;
@@ -432,42 +344,28 @@ err_create_vm:
 		}
 		default:
 			ret = -EFAULT;
-			break;
 		}
-
 		break;
-	}
-	case IC_EVENT_IOEVENTFD: {
-		struct acrn_ioeventfd args;
-
-		if (copy_from_user(&args, (void __user *)ioctl_param,
-				   sizeof(args)))
+	case IC_EVENT_IOEVENTFD:
+		if (copy_from_user(&ioeventfd, (void __user *)ioctl_param,
+				   sizeof(ioeventfd)))
 			return -EFAULT;
 
-		ret = acrn_ioeventfd_config(vm->vmid, &args);
+		ret = acrn_ioeventfd_config(vm, &ioeventfd);
 		break;
-	}
-
-	case IC_EVENT_IRQFD: {
-		struct acrn_irqfd args;
-
-		if (copy_from_user(&args, (void __user *)ioctl_param,
-				   sizeof(args)))
+	case IC_EVENT_IRQFD:
+		if (copy_from_user(&irqfd, (void __user *)ioctl_param,
+				   sizeof(irqfd)))
 			return -EFAULT;
-		ret = acrn_irqfd_config(vm->vmid, &args);
+		ret = acrn_irqfd_config(vm, &irqfd);
 		break;
-	}
-
 	default:
-		pr_warn("Unknown IOCTL 0x%x\n", ioctl_num);
+		pr_warn("acrn: Unknown IOCTL 0x%x!\n", cmd);
 		ret = -EINVAL;
-		break;
 	}
-
 
 	return ret;
 }
-
 
 static int acrn_dev_release(struct inode *inodep, struct file *filep)
 {
@@ -490,10 +388,8 @@ static struct miscdevice acrn_dev = {
 	.fops	= &acrn_fops,
 };
 
-static ssize_t
-offline_cpu_store(struct device *dev,
-			struct device_attribute *attr,
-			const char *buf, size_t count)
+static ssize_t offline_cpu_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
 {
 	u64 cpu, lapicid;
 	int ret;
@@ -502,12 +398,12 @@ offline_cpu_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	if ((cpu < num_possible_cpus()) && cpu_possible(cpu)) {
+	if (cpu_possible(cpu)) {
 		lapicid = cpu_data(cpu).apicid;
-		pr_info("acrn: try to offline cpu %lld with lapicid %lld\n",
+		pr_info("acrn: Try to offline cpu %lld with lapicid %lld\n",
 				cpu, lapicid);
 		if (hcall_sos_offline_cpu(lapicid) < 0) {
-			pr_err("acrn: failed to offline cpu from Hypervisor!\n");
+			pr_err("acrn: Failed to offline cpu from Hypervisor!\n");
 			return -EINVAL;
 		}
 	}
@@ -564,15 +460,16 @@ static int __init hsm_init(void)
 		misc_deregister(&acrn_dev);
 		return -EINVAL;
 	}
+	acrn_setup_ioreq_intr();
 
 	return 0;
 }
 
 static void __exit hsm_exit(void)
 {
-	acrn_remove_intr_irq();
 	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
+	acrn_remove_intr_irq();
 }
 
 module_init(hsm_init);

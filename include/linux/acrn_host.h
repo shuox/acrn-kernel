@@ -11,16 +11,19 @@
 #include <linux/types.h>
 #include <linux/acrn.h>
 
+struct acrn_vm;
+struct ioreq_client;
+
 /**
  * acrn_mm_gpa2hva - convert guest physical address to host virtual address
  *
- * @vmid: guest vmid
+ * @vm: guest VM
  * @guest_pa: physical address in guest
  * @size: the memory size mapped
  *
  * Return: host kernel virtual address, NULL on error
  */
-extern void *acrn_mm_gpa2hva(unsigned short vmid, u64 guest_pa, size_t size);
+extern void *acrn_mm_gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size);
 
 /**
  * acrn_mm_add_region - add a guest memory region
@@ -86,104 +89,89 @@ int acrn_inject_msi(unsigned short vmid,
 
 
 /* the API related with emulated mmio ioreq */
-typedef	int (*ioreq_handler_t)(int client_id,
-			       unsigned long *ioreqs_map,
-			       void *client_priv);
+typedef	int (*ioreq_handler_t)(struct ioreq_client *client,
+				struct acrn_request *req);
+
+struct ioreq_client {
+	/* client name */
+	char name[16];
+	/* VM this client belongs to */
+	struct acrn_vm *vm;
+	/* list node for this ioreq_client */
+	struct list_head list;
+	/*
+	 * This flag indicates if this is the default client
+	 * Each VM has a default client.
+	 */
+	bool is_default;
+
+	unsigned long flags;
+
+	/* client covered io ranges - N/A for default client */
+	struct list_head range_list;
+	rwlock_t range_lock;
+
+	/* records the pending IO requests of corresponding vcpu */
+	DECLARE_BITMAP(ioreqs_map, ACRN_REQUEST_MAX);
+
+	/* IO requests handler of this client */
+	ioreq_handler_t handler;
+	struct task_struct *thread;
+	wait_queue_head_t wq;
+	void *priv;
+};
 
 /**
  * acrn_ioreq_create_client - create ioreq client
  *
- * @vmid: ID to identify guest
+ * @vm: the VM this client belongs to
  * @handler: ioreq_handler of ioreq client
- *           If client wants to handle request in client thread context, set
- *           this parameter to NULL. If client wants to handle request out of
- *           client thread context, set handler function pointer of its own.
  *           acrn_hsm will create kernel thread and call handler to handle
- *           request(This is recommended).
- *
- * @client_priv: the private structure for the given client.
- *           When handler is not NULL, this is required and used as the
- *           third argument of ioreq_handler callback
- *
+ *           request. An exception is the default client doesn't have handler
+ *           in kernel, it has a userspace thread instead.
+ * @data: passed-in data structure for handler
+ * @is_default: if it is the default client
  * @name: the name of ioreq client
  *
  * Return: client id on success, <0 on error
  */
-int acrn_ioreq_create_client(unsigned short vmid,
-			     ioreq_handler_t handler,
-			     void *client_priv,
-			     char *name);
+struct ioreq_client *acrn_ioreq_create_client(struct acrn_vm *vm,
+				ioreq_handler_t handler, void *data,
+				bool is_default, char *name);
 
 /**
  * acrn_ioreq_destroy_client - destroy ioreq client
  *
- * @client_id: client id to identify ioreq client
+ * @client: ioreq client
  *
  * Return:
  */
-void acrn_ioreq_destroy_client(int client_id);
+void acrn_ioreq_destroy_client(struct ioreq_client *client);
 
 /**
- * acrn_ioreq_add_iorange - add iorange monitored by ioreq client
+ * acrn_ioreq_add_range - add iorange monitored by ioreq client
  *
- * @client_id: client id to identify ioreq client
+ * @client: ioreq client
  * @type: iorange type
  * @start: iorange start address
  * @end: iorange end address
  *
  * Return: 0 on success, <0 on error
  */
-int acrn_ioreq_add_iorange(int client_id, uint32_t type,
+int acrn_ioreq_add_range(struct ioreq_client *client, uint32_t type,
 			   long start, long end);
 
 /**
- * acrn_ioreq_del_iorange - del iorange monitored by ioreq client
+ * acrn_ioreq_del_range - del iorange monitored by ioreq client
  *
- * @client_id: client id to identify ioreq client
+ * @client: ioreq client
  * @type: iorange type
  * @start: iorange start address
  * @end: iorange end address
  *
  * Return: 0 on success, <0 on error
  */
-int acrn_ioreq_del_iorange(int client_id, uint32_t type,
+int acrn_ioreq_del_range(struct ioreq_client *client, uint32_t type,
 			   long start, long end);
-
-/**
- * acrn_ioreq_get_reqbuf - get request buffer
- * request buffer is shared by all clients in one guest
- *
- * @client_id: client id to identify ioreq client
- *
- * Return: pointer to request buffer, NULL on error
- */
-struct acrn_request *acrn_ioreq_get_reqbuf(int client_id);
-
-/**
- * acrn_ioreq_attach_client - start handle request for ioreq client
- * If request is handled out of client thread context, this function is
- * only called once to be ready to handle new request.
- *
- * If request is handled in client thread context, this function must
- * be called every time after the previous request handling is completed
- * to be ready to handle new request.
- *
- * @client_id: client id to identify ioreq client
- *
- * Return: 0 on success, <0 on error, 1 if ioreq client is destroying
- */
-int acrn_ioreq_attach_client(int client_id);
-
-/**
- * acrn_ioreq_complete_request - notify guest request handling is completed
- *
- * @client_id: client id to identify ioreq client
- * @vcpu: identify request submitter
- * @req: the acrn_request that is marked as completed
- *
- * Return: 0 on success, <0 on error
- */
-int acrn_ioreq_complete_request(int client_id, uint64_t vcpu,
-				struct acrn_request *req);
 
 #endif
