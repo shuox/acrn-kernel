@@ -202,8 +202,6 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
 	if (!pages)
 		return -ENOMEM;
-	printk("lskakaxi, malloc pages[%llx], size[%llx] nr_pages[%d]\n",
-			pages, nr_pages * sizeof(struct page *), nr_pages);
 
 	ret = get_user_pages_fast(memmap->vma_base,
 			nr_pages, FOLL_WRITE, pages);
@@ -215,8 +213,6 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 
 	/* record host va <-> guest pa mapping */
 	remap_vaddr = vm_map_ram(pages, nr_pages, -1, PAGE_KERNEL);
-	printk("lskakaxi, vm_map_ram remap_addr[%lx], nr_pages[%d]\n",
-			remap_vaddr, nr_pages);
 	if (!remap_vaddr) {
 		ret = -ENOMEM;
 		goto err_remap;
@@ -243,8 +239,6 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 	}
 	map_region_data = kzalloc(sizeof(struct map_regions) +
 			sizeof(*vm_region) * nr_regions, GFP_KERNEL);
-	printk("lskakaxi, malloc map_region_data[%llx], size[%llx], nr_regions[%d] \n",
-			map_region_data, sizeof(struct map_regions) + sizeof(*vm_region) * nr_regions, nr_regions);
 	if (!map_region_data) {
 		ret = -ENOMEM;
 		goto err_map_region_data;
