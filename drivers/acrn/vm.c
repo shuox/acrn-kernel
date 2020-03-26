@@ -52,7 +52,7 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 	acrn_ioeventfd_init(vm);
 	acrn_irqfd_init(vm);
 
-	pr_debug("acrn: VM %d created\n", vm->vmid);
+	pr_info("acrn: VM %d created.\n", vm->vmid);
 	return vm;
 }
 
@@ -82,10 +82,11 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {
-		pr_warn("failed to destroy VM %d\n", vm->vmid);
+		pr_warn("acrn: Failed to destroy VM %d\n", vm->vmid);
 		clear_bit(ACRN_VM_DESTROYED, &vm->flags);
 		return -EFAULT;
 	}
+	pr_info("acrn: VM %d destroyed.\n", vm->vmid);
 	vm->vmid = ACRN_INVALID_VMID;
 	return 0;
 }
@@ -101,16 +102,17 @@ int acrn_inject_msi(uint16_t vmid, unsigned long msi_addr,
 	if (!msi)
 		return -ENOMEM;
 
-	/* msi_addr: addr[19:12] with dest vcpu id */
-	/* msi_data: data[7:0] with vector */
+	/*
+	 * msi_addr: addr[19:12] with dest vcpu id
+	 * msi_data: data[7:0] with vector
+	 */
 	msi->msi_addr = msi_addr;
 	msi->msi_data = msi_data;
 	ret = hcall_inject_msi(vmid, virt_to_phys(msi));
-	kfree(msi);
 	if (ret < 0) {
-		pr_err("acrn: failed to inject MSI for vmid %d, msi_addr %lx msi_data%lx!\n",
-				vmid, msi_addr, msi_data);
-		return -EFAULT;
+		pr_err("acrn: Failed to inject MSI!\n");
+		ret = -EFAULT;
 	}
-	return 0;
+	kfree(msi);
+	return ret;
 }

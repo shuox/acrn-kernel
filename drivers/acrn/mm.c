@@ -39,14 +39,14 @@ static int modify_region(unsigned short vmid,
 	regions->regions_pa = virt_to_phys(region);
 
 	ret = hcall_set_memory_regions(virt_to_phys(regions));
-	kfree(regions);
 	if (ret < 0) {
 		pr_err("acrn: Failed to set memory region for VM[%d]!\n",
 		       vmid);
-		return -EFAULT;
+		ret = -EFAULT;
 	}
 
-	return 0;
+	kfree(regions);
+	return ret;
 }
 
 int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
@@ -68,6 +68,8 @@ int acrn_mm_add_region(unsigned short vmid, unsigned long guest_pa,
 			(mem_access_right & MEM_ACCESS_RIGHT_MASK));
 	ret = modify_region(vmid, region);
 
+	pr_debug("acrn: %s: GPA[%lx] HPA[%lx] size[0x%lx].\n",
+			__func__, guest_pa, host_pa, size);
 	kfree(region);
 	return ret;
 }
@@ -91,6 +93,8 @@ int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
 
 	ret = modify_region(vmid, region);
 
+	pr_debug("acrn: %s: GPA[%lx] size[0x%lx].\n",
+			__func__, host_pa, size);
 	kfree(region);
 	return ret;
 }
@@ -108,12 +112,9 @@ int acrn_mm_page_wp(unsigned short vmid, unsigned long guest_pa, bool enable_wp)
 	wp->set = enable_wp ? 1 : 0;
 	wp->gpa = guest_pa;
 	ret = hcall_write_protect_page(vmid, virt_to_phys(wp));
-	kfree(wp);
-
-	if (ret < 0) {
+	if (ret < 0)
 		ret = -EFAULT;
-	}
-
+	kfree(wp);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(acrn_mm_page_wp);
@@ -226,7 +227,7 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 		region_mapping->host_vm_va = remap_vaddr;
 		region_mapping->guest_vm_pa = memmap->guest_vm_pa;
 	} else
-		pr_warn("acrn: Run out of memory mapping slot!\n");
+		pr_warn("acrn: Run out of memory mapping slots!\n");
 	mutex_unlock(&vm->regions_mapping_lock);
 
 	/* Calculate vm_memory_region number */
@@ -276,8 +277,10 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 		ret = -EFAULT;
 		goto err_set_region;
 	}
-
 	kfree(map_region_data);
+
+	pr_debug("acrn: %s: VM[%d] HVA[%p] GPA[%p] size[%lx].\n", __func__,
+		vm->vmid, remap_vaddr, memmap->guest_vm_pa, memmap->len);
 	return ret;
 
 err_set_region:
@@ -303,6 +306,8 @@ void unmap_guest_all_ram(struct acrn_vm *vm)
 	mutex_lock(&vm->regions_mapping_lock);
 	for (i = 0; i < vm->regions_mapping_count; i++) {
 		region_mapping = &vm->regions_mapping[i];
+		vm_unmap_ram(region_mapping->host_vm_va,
+				region_mapping->npages);
 		for (j = 0; j < region_mapping->npages; j++) {
 			put_page(region_mapping->pages[j]);
 		}

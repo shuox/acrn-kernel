@@ -88,7 +88,7 @@ int acrn_ioreq_add_range(struct ioreq_client *client,
 	struct ioreq_range *range;
 
 	if (end < start) {
-		pr_err("acrn: invalid IO range [0x%lx,0x%lx]\n", start, end);
+		pr_err("acrn: Invalid IO range [0x%lx,0x%lx]\n", start, end);
 		return -EFAULT;
 	}
 
@@ -144,7 +144,7 @@ static int ioreq_task(void *data)
 			req = (struct acrn_request *)&client->vm->req_buf[vcpu];
 			ret = client->handler(client, req);
 			if (ret < 0) {
-				pr_err("acrn: IO handle failure:%d\n", ret);
+				pr_err("acrn: IO handle failure: %d\n", ret);
 				break;
 			}
 			acrn_ioreq_complete_request(client, vcpu, req);
@@ -193,7 +193,7 @@ void acrn_ioreq_clear_request(struct acrn_vm *vm)
 	} while (has_pending && --retry_cnt > 0);
 
 	if (retry_cnt == 0)
-		pr_warn("acrn: client[%s] cannot flush pending request!\n",
+		pr_warn("acrn: %s cannot flush pending request!\n",
 			client->name);
 
 	/* Clear all ioreqs belong to DM. */
@@ -401,7 +401,7 @@ struct ioreq_client *acrn_ioreq_create_client(struct acrn_vm *vm,
 		list_add(&client->list, &vm->ioreq_clients);
 	spin_unlock_bh(&vm->ioreq_clients_lock);
 
-	pr_info("acrn: Created ioreq client %s\n", name);
+	pr_debug("acrn: Created ioreq client %s.\n", name);
 	return client;
 }
 
@@ -410,6 +410,7 @@ void acrn_ioreq_destroy_client(struct ioreq_client *client)
 	struct acrn_vm *vm = client->vm;
 	struct ioreq_range *range, *next;
 
+	pr_debug("acrn: Destroy ioreq client %s.\n", client->name);
 	/* Flush the tasklet and its thread to ensure no more access pending */
 	tasklet_disable(&ioreq_tasklet);
 	set_bit(IOREQ_CLIENT_DESTROYING, &client->flags);
@@ -540,6 +541,7 @@ void acrn_ioreq_deinit(struct acrn_vm *vm)
 {
 	struct ioreq_client *client, *next;
 
+	pr_debug("acrn: Deinit ioreq buffer @%p!\n", vm->req_buf);
 	/* Destroy all clients belong to this VM */
 	list_for_each_entry_safe(client, next, &vm->ioreq_clients, list)
 		acrn_ioreq_destroy_client(client);

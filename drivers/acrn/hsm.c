@@ -403,7 +403,7 @@ static ssize_t offline_cpu_store(struct device *dev,
 
 	if (cpu_possible(cpu)) {
 		lapicid = cpu_data(cpu).apicid;
-		pr_info("acrn: Try to offline cpu %lld with lapicid %lld\n",
+		pr_debug("acrn: Try to offline cpu %lld with lapicid %lld\n",
 				cpu, lapicid);
 		if (hcall_sos_offline_cpu(lapicid) < 0) {
 			pr_err("acrn: Failed to offline cpu from Hypervisor!\n");
@@ -473,8 +473,8 @@ static void __exit hsm_exit(void)
 	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 	acrn_remove_intr_irq();
+	pr_info("acrn: hsm exit.\n");
 }
-
 module_init(hsm_init);
 module_exit(hsm_exit);
 
