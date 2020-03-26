@@ -47,10 +47,10 @@
 
 /* PCI assignment*/
 #define HC_ID_PCI_BASE              0x50UL
-#define HC_ASSIGN_PTDEV             _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x00)
-#define HC_DEASSIGN_PTDEV           _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x01)
 #define HC_SET_PTDEV_INTR_INFO      _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x03)
 #define HC_RESET_PTDEV_INTR_INFO    _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x04)
+#define HC_ASSIGN_PCIDEV            _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x05)
+#define HC_DEASSIGN_PCIDEV          _HC_ID(HC_ID, HC_ID_PCI_BASE + 0x06)
 
 /* DEBUG */
 #define HC_ID_DBG_BASE              0x60UL
@@ -174,16 +174,16 @@ long hcall_write_protect_page(unsigned long vmid, unsigned long wp);
 /*
  * Assign one PCI device to target VM
  * @vmid: identifier of target VM
- * @bdf: the assigned PCI device(bus:dev:func)
+ * @addr: the HPA of acrn_pcidev structure
  */
-long hcall_assign_ptdev(unsigned long vmid, unsigned long bdf);
+long hcall_assign_pcidev(unsigned long vmid, unsigned long addr);
 
 /*
  * Deassign one PCI device from target VM
  * @vmid: identifier of target VM
- * @bdf: the assigned PCI device(bus:dev:func)
+ * @addr: the HPA of acrn_pcidev structure
  */
-long hcall_deassign_ptdev(unsigned long vmid, unsigned long bdf);
+long hcall_deassign_pcidev(unsigned long vmid, unsigned long addr);
 
 /*
  * Configure interrupt for the assigned PCI device

@@ -11,6 +11,7 @@
  */
 
 #include <linux/types.h>
+#include <linux/printk.h>
 #include <asm/ptrace.h>
 #include <asm/acrn.h>
 #include "hypercall.h"
@@ -107,14 +108,14 @@ long hcall_write_protect_page(unsigned long vmid, unsigned long wp)
 }
 
 /* PCI device assignment */
-long hcall_assign_ptdev(unsigned long vmid, unsigned long bdf)
+inline long hcall_assign_pcidev(unsigned long vmid, unsigned long addr)
 {
-	return acrn_hypercall2(HC_ASSIGN_PTDEV, vmid, bdf);
+	return acrn_hypercall2(HC_ASSIGN_PCIDEV, vmid, addr);
 }
 
-long hcall_deassign_ptdev(unsigned long vmid, unsigned long bdf)
+inline long hcall_deassign_pcidev(unsigned long vmid, unsigned long addr)
 {
-	return acrn_hypercall2(HC_DEASSIGN_PTDEV, vmid, bdf);
+	return acrn_hypercall2(HC_DEASSIGN_PCIDEV, vmid, addr);
 }
 
 long hcall_set_ptdev_intr_info(unsigned long vmid, unsigned long pt_irq)

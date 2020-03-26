@@ -55,11 +55,11 @@ static long acrn_dev_ioctl(struct file *filep,
 	struct ic_ptdev_irq ic_pt_irq, *hc_pt_irq;
 	struct acrn_msi_entry *msi;
 	struct ioreq_notify notify;
+	struct acrn_pcidev *pcidev;
 	struct acrn_ioeventfd ioeventfd;
 	struct acrn_irqfd irqfd;
 	struct page *page;
 	u64 cstate_cmd;
-	uint16_t bdf;
 	int ret = 0;
 
 	vm = (struct acrn_vm *)filep->private_data;
@@ -156,27 +156,30 @@ err_create_vm:
 
 		ret = unmap_guest_memseg(vm, &memmap);
 		break;
-	case IC_ASSIGN_PTDEV:
-		if (copy_from_user(&bdf,
-				(void __user *)ioctl_param, sizeof(uint16_t)))
-			return -EFAULT;
+	case IC_ASSIGN_PCIDEV:
+		pcidev = kmalloc(sizeof(struct acrn_pcidev), GFP_KERNEL);
+		if (pcidev == NULL)
+			return -ENOMEM;
+		if (copy_from_user(pcidev,
+				(void *)ioctl_param, sizeof(*pcidev)))
+			ret = -EFAULT;
 
-		ret = hcall_assign_ptdev(vm->vmid, bdf);
-		if (ret < 0) {
-			pr_err("acrn: Failed to assign ptdev!\n");
-			return -EFAULT;
-		}
+		ret = hcall_assign_pcidev(vm->vmid, virt_to_phys(pcidev));
+		if (ret < 0)
+			pr_err("acrn: Failed to assign pci device!\n");
+		kfree(pcidev);
 		break;
-	case IC_DEASSIGN_PTDEV:
-		if (copy_from_user(&bdf,
-				(void __user *)ioctl_param, sizeof(uint16_t )))
-			return -EFAULT;
-
-		ret = hcall_deassign_ptdev(vm->vmid, bdf);
-		if (ret < 0) {
-			pr_err("acrn: failed to deassign ptdev!\n");
-			return -EFAULT;
-		}
+	case IC_DEASSIGN_PCIDEV:
+		pcidev = kmalloc(sizeof(struct acrn_pcidev), GFP_KERNEL);
+		if (pcidev == NULL)
+			return -ENOMEM;
+		if (copy_from_user(pcidev,
+				(void *)ioctl_param, sizeof(*pcidev)))
+			ret = -EFAULT;
+		ret = hcall_deassign_pcidev(vm->vmid, virt_to_phys(pcidev));
+		if (ret < 0)
+			pr_err("acrn: Failed to deassign pci device!\n");
+		kfree(pcidev);
 		break;
 	case IC_SET_PTDEV_INTR_INFO:
 		if (copy_from_user(&ic_pt_irq, (void __user *)ioctl_param,
@@ -262,7 +265,7 @@ err_create_vm:
 		acrn_ioreq_destroy_client(get_default_client(vm));
 		break;
 	case IC_ATTACH_IOREQ_CLIENT:
-		acrn_ioreq_attach_client(get_default_client(vm));
+		ret = acrn_ioreq_attach_client(get_default_client(vm));
 		break;
 	case IC_NOTIFY_REQUEST_FINISH:
 		if (copy_from_user(&notify, (void __user *)ioctl_param,

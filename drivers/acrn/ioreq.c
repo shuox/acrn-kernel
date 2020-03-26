@@ -233,10 +233,14 @@ struct ioreq_client *get_default_client(struct acrn_vm *vm)
  */
 int acrn_ioreq_attach_client(struct ioreq_client *client)
 {
-	wait_event_interruptible(client->wq, (has_pending_request(client) ||
-			 is_destroying(client)) || kthread_should_stop());
-	if (is_destroying(client))
-		return 1;
+	if (client->is_default) {
+		wait_event_interruptible(client->wq,
+			has_pending_request(client) || is_destroying(client));
+		if (is_destroying(client))
+			return 1;
+	} else
+		wait_event_interruptible(client->wq,
+			has_pending_request(client) || kthread_should_stop());
 
 	return 0;
 }
@@ -343,8 +347,10 @@ static struct ioreq_client *find_ioreq_client(struct acrn_vm *vm,
 	list_for_each_entry(client, &vm->ioreq_clients, list) {
 		read_lock_bh(&client->range_lock);
 		list_for_each_entry(range, &client->range_list, list) {
-			if (in_range(range, req))
+			if (in_range(range, req)) {
 				found = client;
+				break;
+			}
 		}
 		read_unlock_bh(&client->range_lock);
 		if (found)
@@ -450,7 +456,7 @@ static int acrn_ioreq_dispatch(struct acrn_vm *vm)
 			spin_lock_bh(&vm->ioreq_clients_lock);
 			client = find_ioreq_client(vm, req);
 			if (!client) {
-				pr_err("acrn: Failed to find ioreq client\n");
+				pr_err("acrn: Failed to find ioreq client!\n");
 				spin_unlock_bh(&vm->ioreq_clients_lock);
 				return -EINVAL;
 			}

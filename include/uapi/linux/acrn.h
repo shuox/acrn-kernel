@@ -356,6 +356,35 @@ struct ic_ptdev_irq {
 	};
 };
 
+/**
+ * @brief Info to assign or deassign PCI for a VM
+ *
+ * the parameter for HC_ASSIGN_PCIDEV or HC_DEASSIGN_PCIDEV hypercall
+ */
+struct acrn_pcidev {
+	/** type of PCI device */
+	uint32_t type;
+
+	/** pass-through PCI device virtual BDF# */
+	uint16_t virt_bdf;
+
+	/** pass-through PCI device physical BDF# */
+	uint16_t phys_bdf;
+
+	/** raw data of PCI Interrupt Line */
+	uint8_t intr_line;
+
+	/** raw data of PCI Interrupt Pin */
+	uint8_t intr_pin;
+
+	/** raw data of PCI bar */
+	uint32_t bar[6];
+
+	/** reserved for extension */
+	uint32_t reserved[6];
+
+} __aligned(8);
+
 #define VM_MEMMAP_SYSMEM       0
 #define VM_MEMMAP_MMIO         1
 
@@ -463,48 +492,48 @@ struct acrn_irqfd {
 #define IC_ID 0x43UL
 
 /* General */
-#define IC_ID_GEN_BASE                  0x0UL
-#define IC_GET_API_VERSION             _IC_ID(IC_ID, IC_ID_GEN_BASE + 0x00)
+#define IC_ID_GEN_BASE			0x0UL
+#define IC_GET_API_VERSION		_IC_ID(IC_ID, IC_ID_GEN_BASE + 0x00)
 
 /* VM management */
-#define IC_ID_VM_BASE                  0x10UL
-#define IC_CREATE_VM                   _IC_ID(IC_ID, IC_ID_VM_BASE + 0x00)
-#define IC_DESTROY_VM                  _IC_ID(IC_ID, IC_ID_VM_BASE + 0x01)
-#define IC_START_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x02)
-#define IC_PAUSE_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x03)
-#define IC_RESET_VM                    _IC_ID(IC_ID, IC_ID_VM_BASE + 0x05)
-#define IC_SET_VCPU_REGS               _IC_ID(IC_ID, IC_ID_VM_BASE + 0x06)
+#define IC_ID_VM_BASE			0x10UL
+#define IC_CREATE_VM			_IC_ID(IC_ID, IC_ID_VM_BASE + 0x00)
+#define IC_DESTROY_VM			_IC_ID(IC_ID, IC_ID_VM_BASE + 0x01)
+#define IC_START_VM			_IC_ID(IC_ID, IC_ID_VM_BASE + 0x02)
+#define IC_PAUSE_VM			_IC_ID(IC_ID, IC_ID_VM_BASE + 0x03)
+#define IC_RESET_VM			_IC_ID(IC_ID, IC_ID_VM_BASE + 0x05)
+#define IC_SET_VCPU_REGS		_IC_ID(IC_ID, IC_ID_VM_BASE + 0x06)
 
 /* IRQ and Interrupts */
-#define IC_ID_IRQ_BASE                 0x20UL
-#define IC_INJECT_MSI                  _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x03)
-#define IC_VM_INTR_MONITOR             _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x04)
-#define IC_SET_IRQLINE                 _IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x05)
+#define IC_ID_IRQ_BASE			0x20UL
+#define IC_INJECT_MSI			_IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x03)
+#define IC_VM_INTR_MONITOR		_IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x04)
+#define IC_SET_IRQLINE			_IC_ID(IC_ID, IC_ID_IRQ_BASE + 0x05)
 
 /* DM ioreq management */
-#define IC_ID_IOREQ_BASE                0x30UL
-#define IC_SET_IOREQ_BUFFER             _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x00)
-#define IC_NOTIFY_REQUEST_FINISH        _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x01)
-#define IC_CREATE_IOREQ_CLIENT          _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x02)
-#define IC_ATTACH_IOREQ_CLIENT          _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x03)
-#define IC_DESTROY_IOREQ_CLIENT         _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x04)
-#define IC_CLEAR_VM_IOREQ               _IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x05)
+#define IC_ID_IOREQ_BASE		0x30UL
+#define IC_SET_IOREQ_BUFFER		_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x00)
+#define IC_NOTIFY_REQUEST_FINISH	_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x01)
+#define IC_CREATE_IOREQ_CLIENT		_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x02)
+#define IC_ATTACH_IOREQ_CLIENT		_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x03)
+#define IC_DESTROY_IOREQ_CLIENT		_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x04)
+#define IC_CLEAR_VM_IOREQ		_IC_ID(IC_ID, IC_ID_IOREQ_BASE + 0x05)
 
 /* Guest memory management */
-#define IC_ID_MEM_BASE                  0x40UL
-#define IC_SET_MEMSEG                   _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x01)
-#define IC_UNSET_MEMSEG                 _IC_ID(IC_ID, IC_ID_MEM_BASE + 0x02)
+#define IC_ID_MEM_BASE			0x40UL
+#define IC_SET_MEMSEG			_IC_ID(IC_ID, IC_ID_MEM_BASE + 0x01)
+#define IC_UNSET_MEMSEG			_IC_ID(IC_ID, IC_ID_MEM_BASE + 0x02)
 
 /* PCI assignment*/
-#define IC_ID_PCI_BASE                  0x50UL
-#define IC_ASSIGN_PTDEV                _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x00)
-#define IC_DEASSIGN_PTDEV              _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x01)
-#define IC_SET_PTDEV_INTR_INFO         _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x03)
-#define IC_RESET_PTDEV_INTR_INFO       _IC_ID(IC_ID, IC_ID_PCI_BASE + 0x04)
+#define IC_ID_PCI_BASE			0x50UL
+#define IC_SET_PTDEV_INTR_INFO		_IC_ID(IC_ID, IC_ID_PCI_BASE + 0x03)
+#define IC_RESET_PTDEV_INTR_INFO	_IC_ID(IC_ID, IC_ID_PCI_BASE + 0x04)
+#define IC_ASSIGN_PCIDEV		_IC_ID(IC_ID, IC_ID_PCI_BASE + 0x05)
+#define IC_DEASSIGN_PCIDEV		_IC_ID(IC_ID, IC_ID_PCI_BASE + 0x06)
 
 /* Power management */
-#define IC_ID_PM_BASE                   0x60UL
-#define IC_PM_GET_CPU_STATE            _IC_ID(IC_ID, IC_ID_PM_BASE + 0x00)
+#define IC_ID_PM_BASE			0x60UL
+#define IC_PM_GET_CPU_STATE		_IC_ID(IC_ID, IC_ID_PM_BASE + 0x00)
 
 /* VHM eventfd */
 #define IC_ID_EVENT_BASE		0x70UL
