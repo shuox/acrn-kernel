@@ -345,6 +345,9 @@ static struct ioreq_client *find_ioreq_client(struct acrn_vm *vm,
 	struct ioreq_range *range;
 
 	list_for_each_entry(client, &vm->ioreq_clients, list) {
+		/* default client is the last one */
+		if (client->is_default)
+			return client;
 		read_lock_bh(&client->range_lock);
 		list_for_each_entry(range, &client->range_list, list) {
 			if (in_range(range, req)) {
