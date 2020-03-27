@@ -10,8 +10,6 @@
  * 		Yin FengWei <fengwei.yin@intel.com>
  */
 
-#include <linux/types.h>
-#include <linux/printk.h>
 #include <asm/ptrace.h>
 #include <asm/acrn.h>
 #include "hypercall.h"

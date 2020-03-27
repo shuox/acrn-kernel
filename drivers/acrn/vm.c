@@ -8,15 +8,9 @@
  * 		Zhao Yakui <yakui.zhao@intel.com>
  * 		Liu Shuo A <shuo.a.liu@intel.com>
  */
-
-#include <linux/list.h>
 #include <linux/slab.h>
-#include <linux/init.h>
 #include <linux/io.h>
 #include <linux/mm.h>
-#include <linux/rwlock_types.h>
-#include <linux/acrn.h>
-#include <linux/acrn_host.h>
 #include "acrn_drv.h"
 
 LIST_HEAD(acrn_vm_list);

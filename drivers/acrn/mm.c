@@ -9,19 +9,9 @@
  * 		Li Fei <lei1.li@intel.com>
  * 		Liu Shuo A <shuo.a.liu@intel.com>
  */
-
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/device.h>
-#include <linux/kernel.h>
-#include <linux/gfp.h>
 #include <linux/mm.h>
-#include <linux/fs.h>
 #include <linux/slab.h>
-#include <linux/list.h>
-#include <linux/uaccess.h>
 #include <linux/io.h>
-#include <linux/acrn.h>
 #include "acrn_drv.h"
 
 static int modify_region(unsigned short vmid,
@@ -94,7 +84,7 @@ int acrn_mm_del_region(unsigned short vmid, unsigned long guest_pa,
 	ret = modify_region(vmid, region);
 
 	pr_debug("acrn: %s: GPA[%lx] size[0x%lx].\n",
-			__func__, host_pa, size);
+			__func__, guest_pa, size);
 	kfree(region);
 	return ret;
 }
@@ -173,7 +163,7 @@ void *acrn_mm_gpa2hva(struct acrn_vm *vm, u64 guest_pa, size_t size)
 			guest_pa >= region->guest_vm_pa + region->size)
 			continue;
 		if (guest_pa + size > region->guest_vm_pa + region->size) {
-			pr_warn("acrn: VM[%d] gpa: 0x%lx, size %lx map fail!\n",
+			pr_warn("acrn: VM[%d] gpa: 0x%llx, size %lx map fail!\n",
 					vm->vmid, guest_pa, size);
 			break;
 		}
@@ -279,7 +269,7 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 	}
 	kfree(map_region_data);
 
-	pr_debug("acrn: %s: VM[%d] HVA[%p] GPA[%p] size[%lx].\n", __func__,
+	pr_debug("acrn: %s: VM[%d] HVA[%p] GPA[%llx] size[0x%llx].\n", __func__,
 		vm->vmid, remap_vaddr, memmap->guest_vm_pa, memmap->len);
 	return ret;
 

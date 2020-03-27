@@ -11,15 +11,10 @@
  * 		Shuo A Liu <shuo.a.liu@intel.com>
  */
 #include <linux/interrupt.h>
-#include <linux/module.h>
 #include <linux/kthread.h>
-#include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/bitops.h>
-#include <linux/rwlock_types.h>
-#include <linux/acrn.h>
 #include <asm/acrn.h>
 #include "acrn_drv.h"
 

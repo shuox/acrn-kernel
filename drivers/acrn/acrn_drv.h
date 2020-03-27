@@ -4,13 +4,11 @@
  *
  */
 
-#ifndef __ACRN_VM_MNGT_H
-#define __ACRN_VM_MNGT_H
+#ifndef __ACRN_HSM_DRV_H
+#define __ACRN_HSM_DRV_H
 
 #include <linux/types.h>
 #include <linux/list.h>
-#include <linux/refcount.h>
-#include <linux/poll.h>
 #include <linux/acrn_host.h>
 #include "hypercall.h"
 

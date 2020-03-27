@@ -7,17 +7,10 @@
  * Authors:	Shuo A Liu <shuo.a.liu@intel.com>
  * 		Yakui Zhao <yakui.zhao@intel.com>
  */
-#include <linux/module.h>
-#include <linux/device.h>
-#include <linux/wait.h>
 #include <linux/poll.h>
 #include <linux/file.h>
-#include <linux/list.h>
 #include <linux/eventfd.h>
-#include <linux/async.h>
 #include <linux/slab.h>
-#include <linux/acrn.h>
-#include <linux/acrn_host.h>
 #include "acrn_drv.h"
 
 static LIST_HEAD(acrn_irqfd_clients);
