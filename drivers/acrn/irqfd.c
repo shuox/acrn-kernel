@@ -209,7 +209,7 @@ int acrn_irqfd_init(struct acrn_vm *vm)
 	if (!vm->irqfd_wq)
 		return -ENOMEM;
 
-	pr_debug("acrn: VM-%d irqfd init.\n", vm->vmid);
+	pr_debug("acrn: VM %d irqfd init.\n", vm->vmid);
 	return 0;
 }
 
@@ -217,7 +217,7 @@ void acrn_irqfd_deinit(struct acrn_vm *vm)
 {
 	struct acrn_hsm_irqfd *irqfd, *next;
 
-	pr_debug("acrn: VM-%d irqfd deinit.\n", vm->vmid);
+	pr_debug("acrn: VM %d irqfd deinit.\n", vm->vmid);
 	destroy_workqueue(vm->irqfd_wq);
 	mutex_lock(&vm->irqfds_lock);
 	list_for_each_entry_safe(irqfd, next, &vm->irqfds, list)

@@ -1,7 +1,6 @@
 config ACRN_HSM
 	tristate "Intel ACRN Hypervisor service Module"
-	depends on ACRN_GUEST
-	default ACRN_GUEST
+	select ACRN_GUEST
 	help
 	  This is the Hypervisor service Module for ACRN guest to
 	  communicate with ACRN hypervisor. It includes the management

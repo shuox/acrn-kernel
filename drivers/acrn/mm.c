@@ -190,7 +190,7 @@ int map_guest_ram(struct acrn_vm *vm, struct vm_memmap *memmap)
 		return -EINVAL;
 
 	nr_pages = memmap->len >> PAGE_SHIFT;
-	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
+	pages = vzalloc(nr_pages * sizeof(struct page *));
 	if (!pages)
 		return -ENOMEM;
 
@@ -284,7 +284,7 @@ err_remap:
 	for (i = 0; i < nr_pages; i++)
 		put_page(pages[i]);
 err_pin_pages:
-	kfree(pages);
+	vfree(pages);
 	return ret;
 }
 
@@ -301,7 +301,7 @@ void unmap_guest_all_ram(struct acrn_vm *vm)
 		for (j = 0; j < region_mapping->npages; j++) {
 			put_page(region_mapping->pages[j]);
 		}
-		kfree(region_mapping->pages);
+		vfree(region_mapping->pages);
 	}
 	mutex_unlock(&vm->regions_mapping_lock);
 }

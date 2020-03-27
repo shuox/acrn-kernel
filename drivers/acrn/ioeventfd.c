@@ -240,7 +240,7 @@ int acrn_ioeventfd_init(struct acrn_vm *vm)
 		return -EINVAL;
 	}
 
-	pr_debug("acrn: VM-%d ioeventfd init.\n", vm->vmid);
+	pr_debug("acrn: VM %d ioeventfd init.\n", vm->vmid);
 	return 0;
 }
 
@@ -248,7 +248,7 @@ void acrn_ioeventfd_deinit(struct acrn_vm *vm)
 {
 	struct hsm_ioeventfd *p, *next;
 
-	pr_debug("acrn: VM-%d ioeventfd deinit.\n", vm->vmid);
+	pr_debug("acrn: VM %d ioeventfd deinit.\n", vm->vmid);
 	acrn_ioreq_destroy_client(vm->ioeventfd_client);
 	mutex_lock(&vm->ioeventfds_lock);
 	list_for_each_entry_safe(p, next, &vm->ioeventfds, list)
