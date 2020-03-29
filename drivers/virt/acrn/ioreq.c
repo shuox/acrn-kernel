@@ -4,11 +4,9 @@
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
- * 		Zhao Yakui <yakui.zhao@intel.com>
- * 		Jack Ren <jack.ren@intel.com>
- * 		FengWei Yin <fengwei.yin@intel.com>
- * 		Shuo A Liu <shuo.a.liu@intel.com>
+ * Authors:
+ * 	Jason Chen CJ <jason.cj.chen@intel.com>
+ * 	Fengwei Yin <fengwei.yin@intel.com>
  */
 #include <linux/interrupt.h>
 #include <linux/kthread.h>

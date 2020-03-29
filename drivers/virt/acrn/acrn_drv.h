@@ -1,8 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause */
-/*
- * ACRN_HSM : vm management header file.
- *
- */
 
 #ifndef __ACRN_HSM_DRV_H
 #define __ACRN_HSM_DRV_H

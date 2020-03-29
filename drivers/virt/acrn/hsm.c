@@ -4,8 +4,9 @@
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Authors:	Shuo A Liu <shuo.a.liu@intel.com>
- * 		Yakui Zhao <yakui.zhao@intel.com>
+ * Authors:
+ * 	Fengwei Yin <fengwei.yin@intel.com>
+ * 	Yakui Zhao <yakui.zhao@intel.com>
  */
 #include <linux/module.h>
 #include <linux/io.h>

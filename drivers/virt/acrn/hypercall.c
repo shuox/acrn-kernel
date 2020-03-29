@@ -4,10 +4,8 @@
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
- * 		Zhao Yakui <yakui.zhao@intel.com>
- * 		Jack Ren <jack.ren@intel.com>
- * 		Yin FengWei <fengwei.yin@intel.com>
+ * Authors:
+ * 	Jack Ren <jack.ren@intel.com>
  */
 
 #include <asm/ptrace.h>

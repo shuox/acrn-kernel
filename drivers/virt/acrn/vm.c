@@ -4,9 +4,9 @@
  *
  * Copyright (C) 2019 Intel Corporation. All rights reserved.
  *
- * Authors:	Jason Chen CJ <jason.cj.chen@intel.com>
- * 		Zhao Yakui <yakui.zhao@intel.com>
- * 		Liu Shuo A <shuo.a.liu@intel.com>
+ * Authors:
+ * 	Jason Chen CJ <jason.cj.chen@intel.com>
+ * 	Yakui Zhao <yakui.zhao@intel.com>
  */
 #include <linux/slab.h>
 #include <linux/io.h>
