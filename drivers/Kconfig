@@ -227,6 +227,4 @@ source "drivers/slimbus/Kconfig"
 source "drivers/interconnect/Kconfig"
 
 source "drivers/counter/Kconfig"
-
-source "drivers/acrn/Kconfig"
 endmenu
