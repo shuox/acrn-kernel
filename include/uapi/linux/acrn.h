@@ -315,6 +315,52 @@ struct acrn_vm_memmap {
 	__u32 attr;
 } __aligned(8);
 
+/**
+ * struct acrn_ptdev_irq - Irq data of a passthrough device
+ */
+struct acrn_ptdev_irq {
+#define ACRN_PTDEV_IRQ_INTX	0
+#define ACRN_PTDEV_IRQ_MSI	1
+#define ACRN_PTDEV_IRQ_MSIX	2
+	/** Type of irq data */
+	__u32 type;
+	/** Virtual BDF */
+	__u16 virt_bdf;
+	/** Physical BDF */
+	__u16 phys_bdf;
+
+	struct {
+		/** Virtual IOAPIC pin */
+		__u32 virt_pin;
+		/** Physical IOAPIC pin */
+		__u32 phys_pin;
+		/** PIC pin or not */
+		__u32 is_pic_pin;
+	} intx;
+} __aligned(8);
+
+#define ACRN_PCI_NUM_BARS	6
+/**
+ * struct acrn_pcidev - Info for assigning or de-assigning a PCI device
+ */
+struct acrn_pcidev {
+	/** Type of PCI device */
+	__u32 type;
+	/** Virtual BDF */
+	__u16 virt_bdf;
+	/** Physical BDF */
+	__u16 phys_bdf;
+	/** PCI interrupt line */
+	__u8 intr_line;
+	/** PCI interrupt pin */
+	__u8 intr_pin;
+	/** PCI BARs */
+	__u32 bar[ACRN_PCI_NUM_BARS];
+	/** reserved for extension */
+	__u32 reserved[6];
+
+} __aligned(8);
+
 /* The ioctl type, documented in ioctl-number.rst */
 #define ACRN_IOCTL_TYPE			0xA2
 
@@ -352,5 +398,14 @@ struct acrn_vm_memmap {
 	_IOW(ACRN_IOCTL_TYPE, 0x41, struct acrn_vm_memmap)
 #define ACRN_IOCTL_UNSET_MEMSEG		\
 	_IOW(ACRN_IOCTL_TYPE, 0x42, struct acrn_vm_memmap)
+
+#define ACRN_IOCTL_SET_PTDEV_INTR	\
+	_IOW(ACRN_IOCTL_TYPE, 0x53, struct acrn_ptdev_irq)
+#define ACRN_IOCTL_RESET_PTDEV_INTR	\
+	_IOW(ACRN_IOCTL_TYPE, 0x54, struct acrn_ptdev_irq)
+#define ACRN_IOCTL_ASSIGN_PCIDEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x55, struct acrn_pcidev)
+#define ACRN_IOCTL_DEASSIGN_PCIDEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x56, struct acrn_pcidev)
 
 #endif /* _ACRN_H */
