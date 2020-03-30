@@ -38,19 +38,84 @@ static int acrn_dev_open(struct inode *inode, struct file *filp)
 static long acrn_dev_ioctl(struct file *filp,
 		    unsigned int cmd, unsigned long ioctl_param)
 {
+	struct acrn_vm *vm;
+	struct acrn_create_vm *vm_param;
+	int ret = 0;
+
+	vm = (struct acrn_vm *)filp->private_data;
 	if (cmd == ACRN_IOCTL_GET_API_VERSION) {
 		if (copy_to_user((void __user *)ioctl_param,
 					&api_version, sizeof(api_version)))
 			return -EFAULT;
+		return 0;
 	}
 
-	return 0;
+	if ((vm->vmid == ACRN_INVALID_VMID) && (cmd != ACRN_IOCTL_CREATE_VM)) {
+		pr_err("acrn: ioctl 0x%x: Invalid VM state!\n", cmd);
+		return -EFAULT;
+	}
+
+	switch (cmd) {
+	case ACRN_IOCTL_CREATE_VM:
+		vm_param = memdup_user((void __user *)ioctl_param,
+				sizeof(struct acrn_create_vm));
+		if (IS_ERR(vm_param))
+			return PTR_ERR(vm_param);
+
+		vm = acrn_vm_create(vm, vm_param);
+		if (!vm) {
+			ret = -EFAULT;
+			kfree(vm_param);
+			break;
+		}
+
+		if (copy_to_user((void __user *)ioctl_param, vm_param,
+				 sizeof(struct acrn_create_vm)))
+			ret = -EFAULT;
+
+		kfree(vm_param);
+		break;
+	case ACRN_IOCTL_START_VM:
+		ret = hcall_start_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: Failed to start VM %d!\n", vm->vmid);
+			ret = -EFAULT;
+		}
+		break;
+	case ACRN_IOCTL_PAUSE_VM:
+		ret = hcall_pause_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: Failed to pause VM %d!\n", vm->vmid);
+			ret = -EFAULT;
+		}
+		break;
+	case ACRN_IOCTL_RESET_VM:
+		ret = hcall_reset_vm(vm->vmid);
+		if (ret < 0) {
+			pr_err("acrn: Failed to restart VM %d!\n", vm->vmid);
+			ret = -EFAULT;
+		}
+		break;
+	case ACRN_IOCTL_DESTROY_VM:
+		ret = acrn_vm_destroy(vm);
+		if (ret < 0) {
+			pr_err("acrn: Failed to destroy VM %d!\n", vm->vmid);
+			ret = -EFAULT;
+		}
+		break;
+	default:
+		pr_warn("acrn: Unknown IOCTL 0x%x!\n", cmd);
+		ret = -EINVAL;
+	}
+
+	return ret;
 }
 
 static int acrn_dev_release(struct inode *inode, struct file *filp)
 {
 	struct acrn_vm *vm = filp->private_data;
 
+	acrn_vm_destroy(vm);
 	kfree(vm);
 	return 0;
 }
