@@ -11,6 +11,7 @@
 
 #define pr_fmt(fmt)	"acrn: " fmt
 
+#include <linux/io.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -48,6 +49,7 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 	struct acrn_vm *vm = filp->private_data;
 	struct acrn_set_vcpu_regs *cpu_regs;
 	struct acrn_create_vm *vm_param;
+	struct acrn_vm_memmap memmap;
 	int ret = 0;
 
 	if (cmd == ACRN_IOCTL_GET_API_VERSION) {
@@ -112,6 +114,20 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 		kfree(cpu_regs);
 		if (ret < 0)
 			pr_err("Failed to set regs state of VM%d!\n", vm->vmid);
+		break;
+	case ACRN_IOCTL_SET_MEMSEG:
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = acrn_map_vm_memseg(vm, &memmap);
+		break;
+	case ACRN_IOCTL_UNSET_MEMSEG:
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = acrn_unmap_vm_memseg(vm, &memmap);
 		break;
 	default:
 		pr_warn("Unknown IOCTL 0x%x!\n", cmd);
