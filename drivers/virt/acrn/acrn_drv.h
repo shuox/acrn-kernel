@@ -123,6 +123,11 @@ struct acrn_vm {
 	struct page *ioreq_page;
 	/* Address of a PCI configuration access emulation */
 	u32 pci_conf_addr;
+
+	/* ioeventfd */
+	struct mutex ioeventfds_lock;
+	struct list_head ioeventfds;
+	struct acrn_ioreq_client *ioeventfd_client;
 };
 
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
@@ -140,5 +145,9 @@ void acrn_setup_ioreq_intr(void);
 void acrn_ioreq_clear_request(struct acrn_vm *vm);
 int acrn_ioreq_wait_client(struct acrn_ioreq_client *client);
 int acrn_ioreq_complete_request_default(struct acrn_vm *vm, u16 vcpu);
+
+int acrn_ioeventfd_init(struct acrn_vm *vm);
+int acrn_ioeventfd_config(struct acrn_vm *vm, struct acrn_ioeventfd *args);
+void acrn_ioeventfd_deinit(struct acrn_vm *vm);
 
 #endif

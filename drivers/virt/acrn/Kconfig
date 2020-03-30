@@ -2,6 +2,7 @@
 config ACRN_HSM
 	tristate "Intel ACRN Hypervisor Service Module"
 	depends on ACRN_GUEST
+	select EVENTFD
 	help
 	  Allow the kernel to act as a privileged ACRN Service OS, managing
 	  resources for other ACRN guests.

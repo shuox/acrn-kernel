@@ -107,6 +107,7 @@ static long acrn_dev_ioctl(struct file *filp,
 	struct acrn_ptdev_irq *irq_info;
 	struct acrn_msi_entry *msi;
 	struct acrn_pcidev *pcidev;
+	struct acrn_ioeventfd ioeventfd;
 	struct page *page;
 	u64 cstate_cmd;
 	int ret = 0;
@@ -303,6 +304,13 @@ static long acrn_dev_ioctl(struct file *filp,
 			return -EFAULT;
 
 		ret = pmcmd_ioctl(cstate_cmd, (void __user *)ioctl_param);
+		break;
+	case ACRN_IOCTL_IOEVENTFD:
+		if (copy_from_user(&ioeventfd, (void __user *)ioctl_param,
+				   sizeof(ioeventfd)))
+			return -EFAULT;
+
+		ret = acrn_ioeventfd_config(vm, &ioeventfd);
 		break;
 	default:
 		pr_warn("acrn: Unknown IOCTL 0x%x!\n", cmd);
