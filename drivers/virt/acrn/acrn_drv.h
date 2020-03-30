@@ -6,6 +6,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/acrn.h>
+#include <linux/acrn_hsm.h>
 
 #include "hypercall.h"
 
@@ -70,6 +71,23 @@ struct vm_memory_mapping {
 	size_t size;
 };
 
+/**
+ * The data for setting the ioreq buffer for a User VM
+ *
+ * The parameter for the HC_SET_IOREQ_BUFFER hypercall
+ */
+struct acrn_set_ioreq_buffer {
+	/** The GPA of the IO request shared buffer of a VM */
+	u64 req_buf;
+};
+
+struct acrn_ioreq_range {
+	struct list_head list;
+	u32 type;
+	u64 start;
+	u64 end;
+};
+
 #define ACRN_INVALID_VMID (0xffffU)
 
 extern struct list_head acrn_vm_list;
@@ -83,6 +101,7 @@ struct acrn_vm {
 	int	vcpu_num;
 
 #define ACRN_VM_FLAG_DESTROYED		0U
+#define ACRN_VM_FLAG_CLEARING_IOREQ	1U
 	unsigned long flags;
 
 	/** Lock to protect regions_mapping */
@@ -91,6 +110,18 @@ struct acrn_vm {
 	struct vm_memory_mapping regions_mapping[ACRN_MEM_MAPPING_MAX];
 	/** Exist number of memory mapping of this VM */
 	int regions_mapping_count;
+
+	spinlock_t ioreq_clients_lock;
+	/* The ioreq clients list of this VM */
+	struct list_head ioreq_clients;
+	/* The default ioreq client */
+	struct acrn_ioreq_client *default_client;
+	/* IO request shared buffer */
+	struct acrn_io_request_buffer *req_buf;
+	/* The page hold the IO request shared buffer */
+	struct page *ioreq_page;
+	/* Address of a PCI configuration access emulation */
+	u32 pci_conf_addr;
 };
 
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
@@ -101,5 +132,12 @@ int acrn_map_guest_memseg(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
 int acrn_unmap_guest_memseg(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
 int acrn_map_guest_ram(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
 void acrn_unmap_guest_all_ram(struct acrn_vm *vm);
+
+int acrn_ioreq_init(struct acrn_vm *vm, u64 buf_vma);
+void acrn_ioreq_deinit(struct acrn_vm *vm);
+void acrn_setup_ioreq_intr(void);
+void acrn_ioreq_clear_request(struct acrn_vm *vm);
+int acrn_ioreq_wait_client(struct acrn_ioreq_client *client);
+int acrn_ioreq_complete_request_default(struct acrn_vm *vm, u16 vcpu);
 
 #endif

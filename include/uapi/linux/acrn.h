@@ -11,6 +11,168 @@
 
 #include <linux/types.h>
 
+#define ACRN_IO_REQUEST_MAX		16
+
+#define ACRN_IOREQ_STATE_PENDING	0
+#define ACRN_IOREQ_STATE_COMPLETE	1
+#define ACRN_IOREQ_STATE_PROCESSING	2
+#define ACRN_IOREQ_STATE_FREE		3
+
+#define ACRN_IOREQ_TYPE_PORTIO		0
+#define ACRN_IOREQ_TYPE_MMIO		1
+#define ACRN_IOREQ_TYPE_PCICFG		2
+
+#define ACRN_IOREQ_DIR_READ		0
+#define ACRN_IOREQ_DIR_WRITE		1
+
+struct acrn_mmio_request {
+	__u32 direction;
+	__u32 reserved;
+	__u64 address;
+	__u64 size;
+	__u64 value;
+} __aligned(8);
+
+struct acrn_pio_request {
+	__u32 direction;
+	__u32 reserved;
+	__u64 address;
+	__u64 size;
+	__u32 value;
+} __aligned(8);
+
+struct acrn_pci_request {
+	__u32 direction;
+	__u32 reserved[3];/* need keep same header fields with pio_request */
+	__u64 size;
+	__u32 value;
+	__u32 bus;
+	__u32 dev;
+	__u32 func;
+	__u32 reg;
+} __aligned(8);
+
+/**
+ * struct acrn_io_request - 256-byte ACRN I/O request
+ *
+ * The state transitions of ACRN I/O request:
+ *
+ *    FREE -> PENDING -> PROCESSING -> COMPLETE -> FREE -> ...
+ *                                \              /
+ *                                 +--> FAILED -+
+ *
+ * When a request is in the COMPLETE or FREE state, the request is owned by the
+ * hypervisor. When a request is in the PENDING or PROCESSING state, the
+ * request is owned by the Service VM.
+ *
+ * On basis of the states illustrated above, a typical lifecycle of ACRN IO
+ * request would look like:
+ *
+ * Flow                 (assume the initial state is FREE)
+ * |
+ * |   Service VM vCPU 0     Service VM vCPU x      User vCPU y
+ * |
+ * |                                             hypervisor:
+ * |                                               fills in type, addr, etc.
+ * |                                               pauses the User VM vCPU y
+ * |                                               sets the state to PENDING (a)
+ * |                                               fires an upcall to Service VM
+ * |
+ * | HSM:
+ * |  scans for pending requests
+ * |  sets the states to PROCESSING (b)
+ * |  assigns the requests to clients (c)
+ * V
+ * |                     client:
+ * |                       scans for the assigned requests
+ * |                       handles the requests (d)
+ * |                       sets states to COMPLETE
+ * |                       notifies the hypervisor
+ * |
+ * |                     hypervisor:
+ * |                       resumes User VM vCPU y (e)
+ * |
+ * |                                             hypervisor:
+ * |                                               post handling (f)
+ * V                                               sets states to FREE
+ *
+ * Note that the procedures (a) to (f) in the illustration above require to be
+ * strictly processed in the order.  One vCPU cannot trigger another request of
+ * I/O emulation before completing the previous one.
+ *
+ * Atomic and barriers are required when HSM and hypervisor accessing the state
+ * of acrn_io_request.
+ *
+ */
+struct acrn_io_request {
+	/**
+	 * @type: Type of this request. Byte offset: 0.
+	 */
+	__u32 type;
+
+	/**
+	 * @completion_polling: Hypervisor will poll this for completion in
+	 * polling mode.
+	 *
+	 * Byte offset: 4.
+	 */
+	__u32 completion_polling;
+
+	/**
+	 * @reserved0: Reserved fields. Byte offset: 8.
+	 */
+	__u32 reserved0[14];
+
+	/**
+	 * @reqs: Union of different types of request.
+	 *
+	 * Byte offset: 64.
+	 */
+	union {
+		struct acrn_pio_request pio_request;
+		struct acrn_pci_request pci_request;
+		struct acrn_mmio_request mmio_request;
+		__u64 reserved1[8];
+	} reqs;
+
+	/**
+	 * @reserved1: Reserved fields. Byte offset: 128.
+	 */
+	__u32 reserved1;
+
+	/**
+	 * @kernel_handled: If this request is handled in kernel.
+	 *
+	 * Accessed by HSM only. Byte offset: 132.
+	 */
+	__u32 kernel_handled;
+
+	/**
+	 * @processed: The status of this request.
+	 *
+	 * Take ACRN_IOREQ_STATE_xxx as values. Byte offset: 136.
+	 */
+	__u32 processed;
+} __aligned(256);
+
+struct acrn_io_request_buffer {
+	union {
+		struct acrn_io_request req_slot[ACRN_IO_REQUEST_MAX];
+		__u8 reserved[4096];
+	};
+};
+
+/**
+ * struct acrn_ioreq_notify - The structure of ioreq completion notification
+ *
+ * @vmid: VM ID
+ * @vcpu: vCPU ID
+ */
+struct acrn_ioreq_notify {
+	__u32 vmid;
+	__u32 vcpu;
+} __aligned(8);
+
 /**
  * struct acrn_api_version - structure of ACRN API version
  *
@@ -174,6 +336,17 @@ struct acrn_vm_memmap {
 	_IO(ACRN_IOCTL_TYPE, 0x15)
 #define ACRN_IOCTL_SET_VCPU_REGS	\
 	_IOW(ACRN_IOCTL_TYPE, 0x16, struct acrn_set_vcpu_regs)
+
+#define ACRN_IOCTL_NOTIFY_REQUEST_FINISH \
+	_IOW(ACRN_IOCTL_TYPE, 0x31, struct acrn_ioreq_notify)
+#define ACRN_IOCTL_CREATE_IOREQ_CLIENT	\
+	_IO(ACRN_IOCTL_TYPE, 0x32)
+#define ACRN_IOCTL_ATTACH_IOREQ_CLIENT	\
+	_IO(ACRN_IOCTL_TYPE, 0x33)
+#define ACRN_IOCTL_DESTROY_IOREQ_CLIENT	\
+	_IO(ACRN_IOCTL_TYPE, 0x34)
+#define ACRN_IOCTL_CLEAR_VM_IOREQ	\
+	_IO(ACRN_IOCTL_TYPE, 0x35)
 
 #define ACRN_IOCTL_SET_MEMSEG		\
 	_IOW(ACRN_IOCTL_TYPE, 0x41, struct acrn_vm_memmap)

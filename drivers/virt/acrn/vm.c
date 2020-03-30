@@ -29,8 +29,16 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 	}
 
 	mutex_init(&vm->regions_mapping_lock);
+	INIT_LIST_HEAD(&vm->ioreq_clients);
+	spin_lock_init(&vm->ioreq_clients_lock);
 	vm->vmid = vm_param->vmid;
 	vm->vcpu_num = vm_param->vcpu_num;
+
+	if (acrn_ioreq_init(vm, vm_param->req_buf) < 0) {
+		hcall_destroy_vm(vm_param->vmid);
+		vm->vmid = ACRN_INVALID_VMID;
+		return NULL;
+	}
 
 	write_lock_bh(&acrn_vm_list_lock);
 	list_add(&vm->list, &acrn_vm_list);
@@ -54,6 +62,7 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	list_del_init(&vm->list);
 	write_unlock_bh(&acrn_vm_list_lock);
 
+	acrn_ioreq_deinit(vm);
 	acrn_unmap_guest_all_ram(vm);
 
 	ret = hcall_destroy_vm(vm->vmid);
