@@ -444,6 +444,7 @@ W:	https://projectacrn.org
 F:	arch/x86/include/asm/acrn.h
 F:	arch/x86/kernel/cpu/acrn.c
 F:	drivers/virt/acrn/
+F:	include/linux/acrn_hsm.h
 F:	include/uapi/linux/acrn.h
 
 AD1889 ALSA SOUND DRIVER

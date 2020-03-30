@@ -28,6 +28,7 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 		return NULL;
 	}
 
+	mutex_init(&vm->regions_mapping_lock);
 	vm->vmid = vm_param->vmid;
 	vm->vcpu_num = vm_param->vcpu_num;
 
@@ -52,6 +53,8 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	write_lock_bh(&acrn_vm_list_lock);
 	list_del_init(&vm->list);
 	write_unlock_bh(&acrn_vm_list_lock);
+
+	acrn_unmap_guest_all_ram(vm);
 
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {

@@ -24,6 +24,9 @@
 #define HC_RESET_VM			_HC_ID(HC_ID, HC_ID_VM_BASE + 0x05)
 #define HC_SET_VCPU_REGS		_HC_ID(HC_ID, HC_ID_VM_BASE + 0x06)
 
+#define HC_ID_MEM_BASE			0x40UL
+#define HC_VM_SET_MEMORY_REGIONS	_HC_ID(HC_ID, HC_ID_MEM_BASE + 0x02)
+
 /*
  * Get API_VERSION from hypervisor
  * @api_version: Service VM GPA of version info
@@ -86,6 +89,16 @@ static inline long hcall_reset_vm(u64 vmid)
 static inline long hcall_set_vcpu_regs(u64 vmid, u64 regs_state)
 {
 	return acrn_hypercall2(HC_SET_VCPU_REGS, vmid, regs_state);
+}
+
+/*
+ * EPT mapping setup
+ * @regions_pa: Service VM GPA for vm_memory_region_list that includes the
+ *		addresses of Service VM GPA and User GPA.
+ */
+static inline long hcall_set_memory_regions(u64 regions_pa)
+{
+	return acrn_hypercall1(HC_VM_SET_MEMORY_REGIONS, regions_pa);
 }
 
 #endif /* __ACRN_HSM_HYPERCALL_H */

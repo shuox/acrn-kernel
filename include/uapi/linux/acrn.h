@@ -113,6 +113,46 @@ struct acrn_set_vcpu_regs {
 	struct acrn_vcpu_regs vcpu_regs;
 } __aligned(8);
 
+#define	ACRN_MEM_ACCESS_RIGHT_MASK	0x00000007U
+#define	ACRN_MEM_ACCESS_READ		0x00000001U
+#define	ACRN_MEM_ACCESS_WRITE		0x00000002U
+#define	ACRN_MEM_ACCESS_EXEC		0x00000004U
+#define	ACRN_MEM_ACCESS_RWX		(ACRN_MEM_ACCESS_READ  | \
+					 ACRN_MEM_ACCESS_WRITE | \
+					 ACRN_MEM_ACCESS_EXEC)
+
+#define	ACRN_MEM_TYPE_MASK		0x000007C0U
+#define	ACRN_MEM_TYPE_WB		0x00000040U
+#define	ACRN_MEM_TYPE_WT		0x00000080U
+#define	ACRN_MEM_TYPE_UC		0x00000100U
+#define	ACRN_MEM_TYPE_WC		0x00000200U
+#define	ACRN_MEM_TYPE_WP		0x00000400U
+
+/* Memory mapping types */
+#define	ACRN_MEMMAP_RAM			0
+#define	ACRN_MEMMAP_MMIO		1
+
+/**
+ * struct acrn_vm_memmap - A EPT memory mapping info for a User VM
+ */
+struct acrn_vm_memmap {
+	/** Type of the memory mapping */
+	__u32 type;
+	__u32 reserved;
+	/** Physical address of User VM */
+	__u64 user_vm_pa;
+	union {
+		/** Physical address of Service VM */
+		__u64 service_vm_pa;
+		/** VMA address of Service VM */
+		__u64 vma_base;
+	};
+	/** Length of the memory mapping */
+	__u64 len;
+	/** Attribute of the memory mapping */
+	__u32 attr;
+} __aligned(8);
+
 /* The ioctl type, documented in ioctl-number.rst */
 #define ACRN_IOCTL_TYPE			0xA2
 
@@ -134,5 +174,10 @@ struct acrn_set_vcpu_regs {
 	_IO(ACRN_IOCTL_TYPE, 0x15)
 #define ACRN_IOCTL_SET_VCPU_REGS	\
 	_IOW(ACRN_IOCTL_TYPE, 0x16, struct acrn_set_vcpu_regs)
+
+#define ACRN_IOCTL_SET_MEMSEG		\
+	_IOW(ACRN_IOCTL_TYPE, 0x41, struct acrn_vm_memmap)
+#define ACRN_IOCTL_UNSET_MEMSEG		\
+	_IOW(ACRN_IOCTL_TYPE, 0x42, struct acrn_vm_memmap)
 
 #endif /* _ACRN_H */

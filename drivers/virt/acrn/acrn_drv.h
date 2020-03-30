@@ -9,6 +9,67 @@
 
 #include "hypercall.h"
 
+#define ACRN_MEM_MAPPING_MAX	256
+
+/**
+ * struct vm_memory_region - Basic VM memory region setup info
+ *
+ * The basic info for creating EPT mapping of User VM.
+ */
+struct vm_memory_region {
+#define ACRN_MEM_REGION_ADD	0
+#define ACRN_MEM_REGION_DEL	2
+	/** Operation type of this memory region */
+	u32 type;
+	/** Memory attribute */
+	u32 attr;
+	/** Physical address of User VM to be mapped */
+	u64 user_vm_pa;
+	/** Physical address of Service VM to be mapped */
+	u64 service_vm_pa;
+	/** Size of this region */
+	u64 size;
+};
+
+/**
+ * struct vm_memory_region_list - A batch of vm_memory_region
+ *
+ * Hypercall HC_VM_SET_MEMORY_REGIONS uses this structure to set up multiple
+ * memory regions for a User VM.  A vm_memory_region_list contains multiple
+ * vm_memory_region for batch processing in the ACRN hypervisor.
+ */
+struct vm_memory_region_list {
+	/** The target VM's ID */
+	u16 vmid;
+	/** Reserved */
+	u16 reserved[3];
+	/** The number of vm_memory_region */
+	u32 regions_num;
+	/** Reserved */
+	u32 reserved1;
+	/** Physical address of a vm_memory_region array */
+	u64 regions_gpa;
+};
+
+/*
+ * struct vm_memory_mapping - Memory map between a User VM and the Service VM
+ *
+ * HSM maintains memory mappings between a User VM GPA and the Service VM
+ * kernel VA for kernel based device model emulation.
+ */
+struct vm_memory_mapping {
+	/** pages in Service VM kernel */
+	struct page **pages;
+	/** Number of pages */
+	int npages;
+	/** Virtual address in Service VM kernel */
+	void *service_vm_va;
+	/** Physical address in User VM */
+	u64 user_vm_pa;
+	/** Size of this memory region */
+	size_t size;
+};
+
 #define ACRN_INVALID_VMID (0xffffU)
 
 extern struct list_head acrn_vm_list;
@@ -23,10 +84,22 @@ struct acrn_vm {
 
 #define ACRN_VM_FLAG_DESTROYED		0U
 	unsigned long flags;
+
+	/** Lock to protect regions_mapping */
+	struct mutex regions_mapping_lock;
+	/** Memory mappings of this VM */
+	struct vm_memory_mapping regions_mapping[ACRN_MEM_MAPPING_MAX];
+	/** Exist number of memory mapping of this VM */
+	int regions_mapping_count;
 };
 
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 		struct acrn_create_vm *vm_param);
 int acrn_vm_destroy(struct acrn_vm *vm);
+
+int acrn_map_guest_memseg(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
+int acrn_unmap_guest_memseg(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
+int acrn_map_guest_ram(struct acrn_vm *vm, struct acrn_vm_memmap *memmap);
+void acrn_unmap_guest_all_ram(struct acrn_vm *vm);
 
 #endif

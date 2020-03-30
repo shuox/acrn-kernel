@@ -40,6 +40,7 @@ static long acrn_dev_ioctl(struct file *filp,
 {
 	struct acrn_vm *vm;
 	struct acrn_create_vm *vm_param;
+	struct acrn_vm_memmap memmap;
 	struct acrn_set_vcpu_regs *cpu_regs;
 	int ret = 0;
 
@@ -115,6 +116,20 @@ static long acrn_dev_ioctl(struct file *filp,
 		if (ret < 0)
 			pr_err("acrn: Failed to set regs state of VM %d!\n",
 			       vm->vmid);
+		break;
+	case ACRN_IOCTL_SET_MEMSEG:
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = acrn_map_guest_memseg(vm, &memmap);
+		break;
+	case ACRN_IOCTL_UNSET_MEMSEG:
+		if (copy_from_user(&memmap, (void __user *)ioctl_param,
+				   sizeof(memmap)))
+			return -EFAULT;
+
+		ret = acrn_unmap_guest_memseg(vm, &memmap);
 		break;
 	default:
 		pr_warn("acrn: Unknown IOCTL 0x%x!\n", cmd);
