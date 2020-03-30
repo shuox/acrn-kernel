@@ -44,7 +44,9 @@ static long acrn_dev_ioctl(struct file *filp,
 	struct acrn_set_vcpu_regs *cpu_regs;
 	struct acrn_ioreq_notify notify;
 	struct acrn_ptdev_irq *irq_info;
+	struct acrn_msi_entry *msi;
 	struct acrn_pcidev *pcidev;
+	struct page *page;
 	int ret = 0;
 
 	vm = (struct acrn_vm *)filp->private_data;
@@ -177,6 +179,38 @@ static long acrn_dev_ioctl(struct file *filp,
 		kfree(irq_info);
 		if (ret < 0)
 			pr_err("acrn: Failed to reset intr for ptdev!\n");
+		break;
+	case ACRN_IOCTL_SET_IRQLINE:
+		ret = hcall_set_irqline(vm->vmid, ioctl_param);
+		if (ret < 0)
+			pr_err("acrn: Failed to set interrupt line!\n");
+		break;
+	case ACRN_IOCTL_INJECT_MSI:
+		msi = memdup_user((void __user *)ioctl_param,
+				sizeof(struct acrn_msi_entry));
+		if (IS_ERR(msi))
+			return PTR_ERR(msi);
+
+		ret = hcall_inject_msi(vm->vmid, virt_to_phys(msi));
+		kfree(msi);
+		if (ret < 0)
+			pr_err("acrn: Failed to inject MSI!\n");
+		break;
+	case ACRN_IOCTL_VM_INTR_MONITOR:
+		ret = get_user_pages_fast(ioctl_param, 1, 1, &page);
+		if (unlikely(ret != 1)) {
+			pr_err("acrn-dev: Failed to pin intr hdr buffer!\n");
+			return -ENOMEM;
+		}
+
+		ret = hcall_vm_intr_monitor(vm->vmid, page_to_phys(page));
+		if (ret < 0) {
+			put_page(page);
+			pr_err("acrn-dev: Failed to monitor intr data!\n");
+		}
+		if (vm->monitor_page)
+			put_page(vm->monitor_page);
+		vm->monitor_page = page;
 		break;
 	case ACRN_IOCTL_CREATE_IOREQ_CLIENT:
 		if (!acrn_ioreq_create_client(vm, NULL, NULL, true, "acrndm"))

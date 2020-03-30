@@ -61,4 +61,6 @@ int acrn_mm_add_region(u16 vmid, u64 user_gpa, u64 service_gpa, u64 size,
 			   u32 mem_type, u32 mem_access_right);
 int acrn_mm_del_region(u16 vmid, u64 user_gpa, u64 size);
 
+int acrn_inject_msi(u16 vmid, u64 msi_addr, u64 msi_data);
+
 #endif

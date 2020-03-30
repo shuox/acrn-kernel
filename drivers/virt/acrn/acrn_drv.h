@@ -103,6 +103,7 @@ struct acrn_vm {
 #define ACRN_VM_FLAG_DESTROYED		0U
 #define ACRN_VM_FLAG_CLEARING_IOREQ	1U
 	unsigned long flags;
+	struct page *monitor_page;
 
 	/** Lock to protect regions_mapping */
 	struct mutex regions_mapping_lock;
