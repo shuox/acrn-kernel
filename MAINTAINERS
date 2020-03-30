@@ -436,6 +436,16 @@ S:	Orphan
 F:	drivers/platform/x86/wmi.c
 F:	include/uapi/linux/wmi.h
 
+ACRN HYPERVISOR SERVICE MODULE
+M:	Shuo A Liu <shuo.a.liu@intel.com>
+L:	acrn-dev@lists.projectacrn.org
+S:	Supported
+W:	https://projectacrn.org
+F:	arch/x86/include/asm/acrn.h
+F:	arch/x86/kernel/cpu/acrn.c
+F:	drivers/virt/acrn/
+F:	include/uapi/linux/acrn.h
+
 AD1889 ALSA SOUND DRIVER
 L:	linux-parisc@vger.kernel.org
 S:	Maintained

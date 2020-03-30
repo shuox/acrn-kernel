@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0
+config ACRN_HSM
+	tristate "Intel ACRN Hypervisor Service Module"
+	depends on ACRN_GUEST
+	help
+	  Allow the kernel to act as a privileged ACRN Service OS, managing
+	  resources for other ACRN guests.
+
+	  Only required when acting as a Service OS, not required for simply
+	  running under ACRN.
+
+	  If unsure, say N.
