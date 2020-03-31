@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/io.h>
 #include <linux/mm.h>
+#include <linux/cpu.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/miscdevice.h>
@@ -349,6 +350,41 @@ static struct miscdevice acrn_dev = {
 	.fops	= &acrn_fops,
 };
 
+static ssize_t offline_cpu_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	u64 cpu, lapicid;
+
+	if (kstrtoull(buf, 0, &cpu) < 0)
+		return -EINVAL;
+
+	if (cpu >= num_possible_cpus() || cpu == 0 || !cpu_is_hotpluggable(cpu))
+		return -EINVAL;
+
+	if (cpu_online(cpu))
+		remove_cpu(cpu);
+
+	lapicid = cpu_data(cpu).apicid;
+	pr_debug("acrn: Try to offline cpu %lld with lapicid %lld\n",
+			cpu, lapicid);
+	if (hcall_sos_offline_cpu(lapicid) < 0) {
+		pr_err("acrn: Failed to offline cpu from Hypervisor!\n");
+		return -EINVAL;
+	}
+
+	return count;
+}
+static DEVICE_ATTR_WO(offline_cpu);
+
+static struct attribute *acrn_attrs[] = {
+	&dev_attr_offline_cpu.attr,
+	NULL
+};
+
+static struct attribute_group acrn_attr_group = {
+	.attrs = acrn_attrs,
+};
+
 static int __init hsm_init(void)
 {
 	int ret;
@@ -373,12 +409,19 @@ static int __init hsm_init(void)
 		return ret;
 	}
 
+	if (sysfs_create_group(&acrn_dev.this_device->kobj, &acrn_attr_group)) {
+		pr_warn("acrn: sysfs create failed\n");
+		misc_deregister(&acrn_dev);
+		return -EINVAL;
+	}
 	acrn_setup_ioreq_intr();
+
 	return 0;
 }
 
 static void __exit hsm_exit(void)
 {
+	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 	acrn_remove_intr_irq();
 }

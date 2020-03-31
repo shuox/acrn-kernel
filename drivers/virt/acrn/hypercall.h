@@ -15,6 +15,7 @@
 
 #define HC_ID_GEN_BASE			0x0UL
 #define HC_GET_API_VERSION		_HC_ID(HC_ID, HC_ID_GEN_BASE + 0x00)
+#define HC_SOS_OFFLINE_CPU		_HC_ID(HC_ID, HC_ID_GEN_BASE + 0x01)
 
 #define HC_ID_VM_BASE			0x10UL
 #define HC_CREATE_VM			_HC_ID(HC_ID, HC_ID_VM_BASE + 0x00)
@@ -52,6 +53,15 @@
 static inline long hcall_get_api_version(u64 api_version)
 {
 	return acrn_hypercall1(HC_GET_API_VERSION, api_version);
+}
+
+/*
+ * Notify the hypervisor to offline a vCPU of the Service VM
+ * @cpu: the offline cpu
+ */
+static inline long hcall_sos_offline_cpu(u64 cpu)
+{
+	return acrn_hypercall1(HC_SOS_OFFLINE_CPU, cpu);
 }
 
 /*
