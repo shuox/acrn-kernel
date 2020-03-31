@@ -11,6 +11,7 @@
 
 #define pr_fmt(fmt)	"acrn: " fmt
 
+#include <linux/cpu.h>
 #include <linux/io.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
@@ -348,6 +349,47 @@ static struct miscdevice acrn_dev = {
 	.fops	= &acrn_fops,
 };
 
+static ssize_t remove_cpu_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	u64 cpu, lapicid;
+	int ret;
+
+	if (kstrtoull(buf, 0, &cpu) < 0)
+		return -EINVAL;
+
+	if (cpu >= num_possible_cpus() || cpu == 0 || !cpu_is_hotpluggable(cpu))
+		return -EINVAL;
+
+	if (cpu_online(cpu))
+		remove_cpu(cpu);
+
+	lapicid = cpu_data(cpu).apicid;
+	pr_debug("Try to remove cpu %lld with lapicid %lld\n", cpu, lapicid);
+	ret = hcall_sos_remove_cpu(lapicid);
+	if (ret < 0) {
+		pr_err("Failed to remove cpu %lld from Hypervisor!\n", cpu);
+		goto fail_remove;
+	}
+
+	return count;
+
+fail_remove:
+	add_cpu(cpu);
+	return ret;
+}
+static DEVICE_ATTR_WO(remove_cpu);
+
+static struct attribute *acrn_attrs[] = {
+	&dev_attr_remove_cpu.attr,
+	NULL
+};
+
+static struct attribute_group acrn_attr_group = {
+	.attrs = acrn_attrs,
+};
+
 static int __init hsm_init(void)
 {
 	int ret;
@@ -373,13 +415,20 @@ static int __init hsm_init(void)
 		return ret;
 	}
 
+	if (sysfs_create_group(&acrn_dev.this_device->kobj, &acrn_attr_group)) {
+		pr_warn("sysfs create failed\n");
+		misc_deregister(&acrn_dev);
+		return -EINVAL;
+	}
 	acrn_setup_ioreq_intr();
+
 	return 0;
 }
 
 static void __exit hsm_exit(void)
 {
 	acrn_remove_ioreq_intr();
+	sysfs_remove_group(&acrn_dev.this_device->kobj, &acrn_attr_group);
 	misc_deregister(&acrn_dev);
 }
 module_init(hsm_init);

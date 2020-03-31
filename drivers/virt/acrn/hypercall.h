@@ -15,6 +15,7 @@
 
 #define HC_ID_GEN_BASE			0x0UL
 #define HC_GET_API_VERSION		_HC_ID(HC_ID, HC_ID_GEN_BASE + 0x00)
+#define HC_SOS_REMOVE_CPU		_HC_ID(HC_ID, HC_ID_GEN_BASE + 0x01)
 
 #define HC_ID_VM_BASE			0x10UL
 #define HC_CREATE_VM			_HC_ID(HC_ID, HC_ID_VM_BASE + 0x00)
@@ -54,6 +55,15 @@
 static inline s64 hcall_get_api_version(u64 api_version)
 {
 	return acrn_hypercall1(HC_GET_API_VERSION, api_version);
+}
+
+/**
+ * hcall_sos_remove_cpu() - Remove a vCPU of Service VM
+ * @cpu: The vCPU to be removed
+ */
+static inline long hcall_sos_remove_cpu(u64 cpu)
+{
+	return acrn_hypercall1(HC_SOS_REMOVE_CPU, cpu);
 }
 
 /**
