@@ -128,6 +128,11 @@ struct acrn_vm {
 	struct mutex ioeventfds_lock;
 	struct list_head ioeventfds;
 	struct acrn_ioreq_client *ioeventfd_client;
+
+	/* irqfd */
+	struct mutex irqfds_lock;
+	struct list_head irqfds;
+	struct workqueue_struct *irqfd_wq;
 };
 
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
@@ -149,5 +154,9 @@ int acrn_ioreq_complete_request_default(struct acrn_vm *vm, u16 vcpu);
 int acrn_ioeventfd_init(struct acrn_vm *vm);
 int acrn_ioeventfd_config(struct acrn_vm *vm, struct acrn_ioeventfd *args);
 void acrn_ioeventfd_deinit(struct acrn_vm *vm);
+
+int acrn_irqfd_init(struct acrn_vm *vm);
+int acrn_irqfd_config(struct acrn_vm *vm, struct acrn_irqfd *args);
+void acrn_irqfd_deinit(struct acrn_vm *vm);
 
 #endif
