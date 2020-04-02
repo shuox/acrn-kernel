@@ -40,6 +40,7 @@ static long acrn_dev_ioctl(struct file *filp,
 {
 	struct acrn_vm *vm;
 	struct acrn_create_vm *vm_param;
+	struct acrn_set_vcpu_regs *cpu_regs;
 	int ret = 0;
 
 	vm = (struct acrn_vm *)filp->private_data;
@@ -102,6 +103,18 @@ static long acrn_dev_ioctl(struct file *filp,
 			pr_err("acrn: Failed to destroy VM %d!\n", vm->vmid);
 			ret = -EFAULT;
 		}
+		break;
+	case ACRN_IOCTL_SET_VCPU_REGS:
+		cpu_regs = memdup_user((void __user *)ioctl_param,
+				sizeof(struct acrn_set_vcpu_regs));
+		if (IS_ERR(cpu_regs))
+			return PTR_ERR(cpu_regs);
+
+		ret = hcall_set_vcpu_regs(vm->vmid, virt_to_phys(cpu_regs));
+		kfree(cpu_regs);
+		if (ret < 0)
+			pr_err("acrn: Failed to set regs state of VM %d!\n",
+			       vm->vmid);
 		break;
 	default:
 		pr_warn("acrn: Unknown IOCTL 0x%x!\n", cmd);
