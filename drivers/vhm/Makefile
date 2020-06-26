@@ -1,0 +1,4 @@
+subdir-ccflags-$(CONFIG_ACRN_VHM) := -Werror
+obj-$(CONFIG_ACRN_HSM)	:= vhm.o
+vhm-y += vhm_dev.o vhm_mm.o vhm_ioreq.o vhm_vm_mngt.o vhm_hypercall.o vhm_hugetlb.o \
+	 vhm_ioeventfd.o vhm_irqfd.o vhm_mempool.o
