@@ -189,6 +189,10 @@ struct acrn_ioreq_client *acrn_ioreq_create_client(struct acrn_vm *vm,
 						   void *data, bool is_default,
 						   const char *name);
 void acrn_ioreq_destroy_client(struct acrn_ioreq_client *client);
+int acrn_ioreq_add_range(struct acrn_ioreq_client *client,
+			 u32 type, u64 start, u64 end);
+int acrn_ioreq_del_range(struct acrn_ioreq_client *client,
+			 u32 type, u64 start, u64 end);
 
 int acrn_inject_msi(u16 vmid, u64 msi_addr, u64 msi_data);
 

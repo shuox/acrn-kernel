@@ -99,6 +99,71 @@ int acrn_ioreq_complete_request_default(struct acrn_vm *vm, u16 vcpu)
 	return ret;
 }
 
+/**
+ * acrn_ioreq_add_range - Add an iorange monitored by an ioreq client
+ *
+ * @client: the ioreq client
+ * @type: the type of iorange
+ * @start: the start address of iorange
+ * @end: the end address of iorange
+ *
+ * Return: 0 on success, <0 on error
+ */
+int acrn_ioreq_add_range(struct acrn_ioreq_client *client,
+			 u32 type, u64 start, u64 end)
+{
+	struct acrn_ioreq_range *range;
+
+	if (end < start) {
+		pr_err("Invalid IO range [0x%llx,0x%llx]\n", start, end);
+		return -EFAULT;
+	}
+
+	range = kzalloc(sizeof(*range), GFP_KERNEL);
+	if (!range)
+		return -ENOMEM;
+
+	range->type = type;
+	range->start = start;
+	range->end = end;
+
+	write_lock_bh(&client->range_lock);
+	list_add(&range->list, &client->range_list);
+	write_unlock_bh(&client->range_lock);
+
+	return 0;
+}
+
+/**
+ * acrn_ioreq_del_range - Del an iorange monitored by an ioreq client
+ *
+ * @client: the ioreq client
+ * @type: the type of iorange
+ * @start: the start address of iorange
+ * @end: the end address of iorange
+ *
+ * Return: 0 on success
+ */
+int acrn_ioreq_del_range(struct acrn_ioreq_client *client,
+			 u32 type, u64 start, u64 end)
+{
+	struct acrn_ioreq_range *range;
+
+	write_lock_bh(&client->range_lock);
+	list_for_each_entry(range, &client->range_list, list) {
+		if (type == range->type &&
+		    start == range->start &&
+		    end == range->end) {
+			list_del(&range->list);
+			kfree(range);
+			break;
+		}
+	}
+	write_unlock_bh(&client->range_lock);
+
+	return 0;
+}
+
 static int ioreq_task(void *data)
 {
 	struct acrn_ioreq_client *client = data;
