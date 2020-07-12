@@ -313,6 +313,55 @@ struct acrn_vm_memmap {
 	__u32 attr;
 } __attribute__((aligned(8)));
 
+/* Type of interrupt of a passthrough device */
+#define ACRN_PTDEV_IRQ_INTX	0
+#define ACRN_PTDEV_IRQ_MSI	1
+#define ACRN_PTDEV_IRQ_MSIX	2
+/**
+ * struct acrn_ptdev_irq - Interrupt data of a passthrough device.
+ * @type: The type.
+ * @virt_bdf: Virtual BDF.
+ * @phys_bdf: Physical BDF.
+ * @intx.virt_pin: Virtual IOAPIC pin.
+ * @intx.phys_pin: Physical IOAPIC pin.
+ * @intx.is_pic_pin: PIC pin or not.
+ */
+struct acrn_ptdev_irq {
+	__u32 type;
+	__u16 virt_bdf;
+	__u16 phys_bdf;
+
+	struct {
+		__u32 virt_pin;
+		__u32 phys_pin;
+		__u32 is_pic_pin;
+	} intx;
+} __attribute__((aligned(8)));
+
+/* Type of PCI device assignment */
+#define ACRN_PTDEV_QUIRK_ASSIGN	(1U << 0)
+
+#define ACRN_PCI_NUM_BARS	6
+/**
+ * struct acrn_pcidev - Info for assigning or de-assigning a PCI device
+ * @type: Type of the assignment.
+ * @virt_bdf: Virtual BDF.
+ * @phys_bdf: Physical BDF.
+ * @intr_line: PCI interrupt line.
+ * @intr_pin: PCI interrupt pin.
+ * @bar: PCI BARs.
+ * @reserved: Reserved.
+ */
+struct acrn_pcidev {
+	__u32 type;
+	__u16 virt_bdf;
+	__u16 phys_bdf;
+	__u8 intr_line;
+	__u8 intr_pin;
+	__u32 bar[ACRN_PCI_NUM_BARS];
+	__u32 reserved[6];
+} __attribute__((aligned(8)));
+
 /* The ioctl type, documented in ioctl-number.rst */
 #define ACRN_IOCTL_TYPE			0xA2
 
@@ -350,5 +399,14 @@ struct acrn_vm_memmap {
 	_IOW(ACRN_IOCTL_TYPE, 0x41, struct acrn_vm_memmap)
 #define ACRN_IOCTL_UNSET_MEMSEG		\
 	_IOW(ACRN_IOCTL_TYPE, 0x42, struct acrn_vm_memmap)
+
+#define ACRN_IOCTL_SET_PTDEV_INTR	\
+	_IOW(ACRN_IOCTL_TYPE, 0x53, struct acrn_ptdev_irq)
+#define ACRN_IOCTL_RESET_PTDEV_INTR	\
+	_IOW(ACRN_IOCTL_TYPE, 0x54, struct acrn_ptdev_irq)
+#define ACRN_IOCTL_ASSIGN_PCIDEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x55, struct acrn_pcidev)
+#define ACRN_IOCTL_DEASSIGN_PCIDEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x56, struct acrn_pcidev)
 
 #endif /* _UAPI_ACRN_H */

@@ -31,6 +31,12 @@
 #define HC_ID_MEM_BASE			0x40UL
 #define HC_VM_SET_MEMORY_REGIONS	_HC_ID(HC_ID, HC_ID_MEM_BASE + 0x02)
 
+#define HC_ID_PCI_BASE			0x50UL
+#define HC_SET_PTDEV_INTR		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x03)
+#define HC_RESET_PTDEV_INTR		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x04)
+#define HC_ASSIGN_PCIDEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x05)
+#define HC_DEASSIGN_PCIDEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x06)
+
 /**
  * hcall_get_api_version() - Get API version from hypervisor
  * @api_version: Service VM GPA of version info
@@ -139,6 +145,54 @@ static inline s64 hcall_notify_req_finish(u64 vmid, u64 vcpu)
 static inline s64 hcall_set_memory_regions(u64 regions_pa)
 {
 	return acrn_hypercall1(HC_VM_SET_MEMORY_REGIONS, regions_pa);
+}
+
+/**
+ * hcall_assign_pcidev() - Assign a PCI device to a User VM.
+ * @vmid: The VM ID of User VM.
+ * @addr: Service VM GPA of the acrn_pcidev structure.
+ *
+ * Return: 0 on success, <0 on failure
+ */
+static inline long hcall_assign_pcidev(u64 vmid, u64 addr)
+{
+	return acrn_hypercall2(HC_ASSIGN_PCIDEV, vmid, addr);
+}
+
+/**
+ * hcall_deassign_pcidev() - De-assign a PCI device from a User VM.
+ * @vmid: The VM ID of User VM.
+ * @addr: Service VM GPA of the acrn_pcidev structure.
+ *
+ * Return: 0 on success, <0 on failure
+ */
+static inline long hcall_deassign_pcidev(u64 vmid, u64 addr)
+{
+	return acrn_hypercall2(HC_DEASSIGN_PCIDEV, vmid, addr);
+}
+
+/**
+ * hcall_set_ptdev_intr() - Configure an interrupt for an assigned PCI device.
+ * @vmid: The VM ID of User VM
+ * @irq: Service VM GPA of the acrn_ptdev_irq structure
+ *
+ * Return: 0 on success, <0 on failure
+ */
+static inline long hcall_set_ptdev_intr(u64 vmid, u64 irq)
+{
+	return acrn_hypercall2(HC_SET_PTDEV_INTR, vmid, irq);
+}
+
+/**
+ * hcall_reset_ptdev_intr() - Reset an interrupt for an assigned PCI device.
+ * @vmid: The VM ID of User VM
+ * @irq: Service VM GPA of the acrn_ptdev_irq structure
+ *
+ * Return: 0 on success, <0 on failure
+ */
+static inline long hcall_reset_ptdev_intr(u64 vmid, u64 irq)
+{
+	return acrn_hypercall2(HC_RESET_PTDEV_INTR, vmid, irq);
 }
 
 #endif /* __ACRN_HSM_HYPERCALL_H */

@@ -50,7 +50,9 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 	struct acrn_set_vcpu_regs *cpu_regs;
 	struct acrn_create_vm *vm_param;
 	struct acrn_ioreq_notify notify;
+	struct acrn_ptdev_irq *irq_info;
 	struct acrn_vm_memmap memmap;
+	struct acrn_pcidev *pcidev;
 	int ret = 0;
 
 	if (cmd == ACRN_IOCTL_GET_API_VERSION) {
@@ -129,6 +131,50 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 			return -EFAULT;
 
 		ret = acrn_unmap_vm_memseg(vm, &memmap);
+		break;
+	case ACRN_IOCTL_ASSIGN_PCIDEV:
+		pcidev = memdup_user((void __user *)ioctl_param,
+				     sizeof(struct acrn_pcidev));
+		if (IS_ERR(pcidev))
+			return PTR_ERR(pcidev);
+
+		ret = hcall_assign_pcidev(vm->vmid, virt_to_phys(pcidev));
+		if (ret < 0)
+			pr_err("Failed to assign pci device!\n");
+		kfree(pcidev);
+		break;
+	case ACRN_IOCTL_DEASSIGN_PCIDEV:
+		pcidev = memdup_user((void __user *)ioctl_param,
+				     sizeof(struct acrn_pcidev));
+		if (IS_ERR(pcidev))
+			return PTR_ERR(pcidev);
+
+		ret = hcall_deassign_pcidev(vm->vmid, virt_to_phys(pcidev));
+		if (ret < 0)
+			pr_err("Failed to deassign pci device!\n");
+		kfree(pcidev);
+		break;
+	case ACRN_IOCTL_SET_PTDEV_INTR:
+		irq_info = memdup_user((void __user *)ioctl_param,
+				       sizeof(struct acrn_ptdev_irq));
+		if (IS_ERR(irq_info))
+			return PTR_ERR(irq_info);
+
+		ret = hcall_set_ptdev_intr(vm->vmid, virt_to_phys(irq_info));
+		kfree(irq_info);
+		if (ret < 0)
+			pr_err("Failed to configure intr for ptdev!\n");
+		break;
+	case ACRN_IOCTL_RESET_PTDEV_INTR:
+		irq_info = memdup_user((void __user *)ioctl_param,
+				       sizeof(struct acrn_ptdev_irq));
+		if (IS_ERR(irq_info))
+			return PTR_ERR(irq_info);
+
+		ret = hcall_reset_ptdev_intr(vm->vmid, virt_to_phys(irq_info));
+		kfree(irq_info);
+		if (ret < 0)
+			pr_err("Failed to reset intr for ptdev!\n");
 		break;
 	case ACRN_IOCTL_CREATE_IOREQ_CLIENT:
 		if (vm->default_client)
