@@ -46,6 +46,7 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 	list_add(&vm->list, &acrn_vm_list);
 	write_unlock_bh(&acrn_vm_list_lock);
 
+	acrn_ioeventfd_init(vm);
 	pr_debug("VM %d created.\n", vm->vmid);
 	return vm;
 }
@@ -64,6 +65,7 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	list_del_init(&vm->list);
 	write_unlock_bh(&acrn_vm_list_lock);
 
+	acrn_ioeventfd_deinit(vm);
 	acrn_ioreq_deinit(vm);
 	acrn_unmap_vm_all_ram(vm);
 	if (vm->monitor_page) {
