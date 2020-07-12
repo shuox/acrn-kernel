@@ -426,6 +426,19 @@ struct acrn_ioeventfd {
 	__u64 data;
 };
 
+#define ACRN_IRQFD_FLAG_DEASSIGN	0x01
+/**
+ * struct acrn_irqfd - Info for creating a acrn_irqfd
+ * @fd: The fd of eventfd
+ * @flags: ACRN_IRQFD_FLAG_*
+ * @msi: Info of MSI associated with the irqfd
+ */
+struct acrn_irqfd {
+	__s32 fd;
+	__u32 flags;
+	struct acrn_msi_entry msi;
+};
+
 /* The ioctl type, documented in ioctl-number.rst */
 #define ACRN_IOCTL_TYPE			0xA2
 
@@ -485,5 +498,7 @@ struct acrn_ioeventfd {
 
 #define ACRN_IOCTL_IOEVENTFD		\
 	_IOW(ACRN_IOCTL_TYPE, 0x70, struct acrn_ioeventfd)
+#define ACRN_IOCTL_IRQFD		\
+	_IOW(ACRN_IOCTL_TYPE, 0x71, struct acrn_irqfd)
 
 #endif /* _UAPI_ACRN_H */

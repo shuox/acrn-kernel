@@ -149,6 +149,9 @@ extern rwlock_t acrn_vm_list_lock;
  * @ioeventfds_lock: Lock to protect ioeventfds list
  * @ioeventfds: List to link all hsm_ioeventfd
  * @ioeventfd_client: I/O client for all ioeventfd belong to the VM
+ * @irqfds_lock: Lock to protect irqfds list
+ * @irqfds: List to link all hsm_irqfd
+ * @irqfd_wq: workqueue for irqfd async shutdown
  */
 struct acrn_vm {
 	struct list_head	list;
@@ -171,6 +174,10 @@ struct acrn_vm {
 	struct mutex			ioeventfds_lock;
 	struct list_head		ioeventfds;
 	struct acrn_ioreq_client	*ioeventfd_client;
+
+	struct mutex			irqfds_lock;
+	struct list_head		irqfds;
+	struct workqueue_struct		*irqfd_wq;
 };
 
 struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
@@ -206,5 +213,9 @@ int acrn_inject_msi(u16 vmid, u64 msi_addr, u64 msi_data);
 int acrn_ioeventfd_init(struct acrn_vm *vm);
 int acrn_ioeventfd_config(struct acrn_vm *vm, struct acrn_ioeventfd *args);
 void acrn_ioeventfd_deinit(struct acrn_vm *vm);
+
+int acrn_irqfd_init(struct acrn_vm *vm);
+int acrn_irqfd_config(struct acrn_vm *vm, struct acrn_irqfd *args);
+void acrn_irqfd_deinit(struct acrn_vm *vm);
 
 #endif /* __ACRN_HSM_DRV_H */
