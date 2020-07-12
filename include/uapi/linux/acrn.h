@@ -362,6 +362,16 @@ struct acrn_pcidev {
 	__u32 reserved[6];
 } __attribute__((aligned(8)));
 
+/**
+ * struct acrn_msi_entry - Info for injecting a MSI interrupt to a VM
+ * @msi_addr: MSI addr[19:12] with dest vCPU ID
+ * @msi_data: MSI data[7:0] with vector
+ */
+struct acrn_msi_entry {
+	__u64 msi_addr;
+	__u64 msi_data;
+};
+
 /* The ioctl type, documented in ioctl-number.rst */
 #define ACRN_IOCTL_TYPE			0xA2
 
@@ -383,6 +393,13 @@ struct acrn_pcidev {
 	_IO(ACRN_IOCTL_TYPE, 0x15)
 #define ACRN_IOCTL_SET_VCPU_REGS	\
 	_IOW(ACRN_IOCTL_TYPE, 0x16, struct acrn_set_vcpu_regs)
+
+#define ACRN_IOCTL_INJECT_MSI		\
+	_IOW(ACRN_IOCTL_TYPE, 0x23, struct acrn_msi_entry)
+#define ACRN_IOCTL_VM_INTR_MONITOR	\
+	_IOW(ACRN_IOCTL_TYPE, 0x24, unsigned long)
+#define ACRN_IOCTL_SET_IRQLINE		\
+	_IOW(ACRN_IOCTL_TYPE, 0x25, __u64)
 
 #define ACRN_IOCTL_NOTIFY_REQUEST_FINISH \
 	_IOW(ACRN_IOCTL_TYPE, 0x31, struct acrn_ioreq_notify)

@@ -66,6 +66,10 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 
 	acrn_ioreq_deinit(vm);
 	acrn_unmap_vm_all_ram(vm);
+	if (vm->monitor_page) {
+		put_page(vm->monitor_page);
+		vm->monitor_page = NULL;
+	}
 
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {
@@ -76,4 +80,35 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	pr_debug("VM %d destroyed.\n", vm->vmid);
 	vm->vmid = ACRN_INVALID_VMID;
 	return 0;
+}
+
+/**
+ * acrn_inject_msi() - Inject a MSI interrupt to a User VM
+ * @vmid: The User VM ID
+ * @msi_addr: The MSI address
+ * @msi_data: The MSI data
+ *
+ * Return: 0 on success, <0 on error
+ */
+int acrn_inject_msi(u16 vmid, u64 msi_addr, u64 msi_data)
+{
+	struct acrn_msi_entry *msi;
+	int ret;
+
+	/* might be used in interrupt context, so use GFP_ATOMIC */
+	msi = kzalloc(sizeof(*msi), GFP_ATOMIC);
+	if (!msi)
+		return -ENOMEM;
+
+	/*
+	 * msi_addr: addr[19:12] with dest vcpu id
+	 * msi_data: data[7:0] with vector
+	 */
+	msi->msi_addr = msi_addr;
+	msi->msi_data = msi_data;
+	ret = hcall_inject_msi(vmid, virt_to_phys(msi));
+	if (ret < 0)
+		pr_err("Failed to inject MSI to VM %d!\n", vmid);
+	kfree(msi);
+	return ret;
 }

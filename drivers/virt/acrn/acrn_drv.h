@@ -152,6 +152,7 @@ struct acrn_vm {
 	u16			vmid;
 	int			vcpu_num;
 	unsigned long		flags;
+	struct page		*monitor_page;
 
 	struct mutex		 regions_mapping_lock;
 	struct vm_memory_mapping regions_mapping[ACRN_MEM_MAPPING_MAX];
@@ -188,5 +189,7 @@ struct acrn_ioreq_client *acrn_ioreq_create_client(struct acrn_vm *vm,
 						   void *data, bool is_default,
 						   const char *name);
 void acrn_ioreq_destroy_client(struct acrn_ioreq_client *client);
+
+int acrn_inject_msi(u16 vmid, u64 msi_addr, u64 msi_data);
 
 #endif /* __ACRN_HSM_DRV_H */
