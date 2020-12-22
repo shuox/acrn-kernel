@@ -16,7 +16,6 @@
 #include <linux/slab.h>
 
 #include <asm/acrn.h>
-#include <asm/hypervisor.h>
 
 #include "acrn_drv.h"
 
@@ -352,7 +351,7 @@ static ssize_t remove_cpu_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	u64 cpu, lapicid;
+	u64 cpu;
 	int ret;
 
 	if (kstrtoull(buf, 0, &cpu) < 0)
@@ -364,9 +363,8 @@ static ssize_t remove_cpu_store(struct device *dev,
 	if (cpu_online(cpu))
 		remove_cpu(cpu);
 
-	lapicid = cpu_data(cpu).apicid;
-	dev_dbg(dev, "Try to remove cpu %lld with lapicid %lld\n", cpu, lapicid);
-	ret = hcall_sos_remove_cpu(lapicid);
+	dev_dbg(dev, "Try to remove cpu %lld \n", cpu);
+	ret = hcall_sos_remove_cpu(cpu);
 	if (ret < 0) {
 		dev_err(dev, "Failed to remove cpu %lld!\n", cpu);
 		goto fail_remove;
@@ -411,12 +409,6 @@ struct miscdevice acrn_dev = {
 static int __init hsm_init(void)
 {
 	int ret;
-
-	if (x86_hyper_type != X86_HYPER_ACRN)
-		return -ENODEV;
-
-	if (!(cpuid_eax(ACRN_CPUID_FEATURES) & ACRN_FEATURE_PRIVILEGED_VM))
-		return -EPERM;
 
 	ret = misc_register(&acrn_dev);
 	if (ret) {

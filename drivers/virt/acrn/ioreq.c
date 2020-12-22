@@ -602,7 +602,7 @@ int acrn_ioreq_init(struct acrn_vm *vm, u64 buf_vma)
 	ret = pin_user_pages_fast(buf_vma, 1,
 				  FOLL_WRITE | FOLL_LONGTERM, &page);
 	if (unlikely(ret != 1) || !page) {
-		dev_err(acrn_dev.this_device, "Failed to pin ioreq page!\n");
+		dev_err(acrn_dev.this_device, "Failed to pin ioreq page! ret[%d]\n", ret);
 		ret = -EFAULT;
 		goto free_buf;
 	}

@@ -226,6 +226,13 @@ struct acrn_regs {
 	__le16				tr_sel;
 };
 
+struct acrn_arm_regs {
+	__u64	regs[31];
+	__u64	sp;
+	__u64	pc;
+	__u32	pstate;
+};
+
 /**
  * struct acrn_vcpu_regs - Info of vCPU registers state
  * @vcpu_id:	vCPU ID
@@ -237,7 +244,10 @@ struct acrn_regs {
 struct acrn_vcpu_regs {
 	__u16			vcpu_id;
 	__u16			reserved[3];
-	struct acrn_regs	vcpu_regs;
+	union {
+		struct acrn_regs	vcpu_regs;
+		struct acrn_arm_regs	arm_regs;
+	};
 };
 
 #define	ACRN_MEM_ACCESS_RIGHT_MASK	0x00000007U

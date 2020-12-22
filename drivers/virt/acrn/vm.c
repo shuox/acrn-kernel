@@ -27,6 +27,8 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 {
 	int ret;
 
+	printk("vmid[%d] vcpu_num[%d] ioreq_buf[%lx]\n",
+			vm_param->vmid, vm_param->vcpu_num, vm_param->ioreq_buf);
 	ret = hcall_create_vm(virt_to_phys(vm_param));
 	if (ret < 0 || vm_param->vmid == ACRN_INVALID_VMID) {
 		dev_err(acrn_dev.this_device,
@@ -34,6 +36,8 @@ struct acrn_vm *acrn_vm_create(struct acrn_vm *vm,
 		return NULL;
 	}
 
+	printk("vmid[%d] vcpu_num[%d] ioreq_buf[%lx]\n",
+			vm_param->vmid, vm_param->vcpu_num, vm_param->ioreq_buf);
 	mutex_init(&vm->regions_mapping_lock);
 	INIT_LIST_HEAD(&vm->ioreq_clients);
 	spin_lock_init(&vm->ioreq_clients_lock);

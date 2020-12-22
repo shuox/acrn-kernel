@@ -3,4 +3,5 @@ obj-y			+= kernel/ mm/
 obj-$(CONFIG_NET)	+= net/
 obj-$(CONFIG_KVM)	+= kvm/
 obj-$(CONFIG_XEN)	+= xen/
+obj-$(CONFIG_ACRN_GUEST)+= acrn/
 obj-$(CONFIG_CRYPTO)	+= crypto/

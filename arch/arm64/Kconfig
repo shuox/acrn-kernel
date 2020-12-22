@@ -1147,6 +1147,16 @@ config XEN
 	help
 	  Say Y if you want to run Linux in a Virtual Machine on Xen on ARM64.
 
+config ACRN_GUEST
+	bool "ACRN Guest support"
+	depends on ARM64
+	help
+	  This option allows to run Linux as guest in the ACRN hypervisor. ACRN is
+	  a flexible, lightweight reference open-source hypervisor, built with
+	  real-time and safety-criticality in mind. It is built for embedded
+	  IOT with small footprint and real-time features. More details can be
+	  found in https://projectacrn.org/.
+
 config FORCE_MAX_ZONEORDER
 	int
 	default "14" if (ARM64_64K_PAGES && TRANSPARENT_HUGEPAGE)

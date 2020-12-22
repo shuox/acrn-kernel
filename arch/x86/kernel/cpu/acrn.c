@@ -76,3 +76,9 @@ const __initconst struct hypervisor_x86 x86_hyper_acrn = {
 	.init.init_platform     = acrn_init_platform,
 	.init.x2apic_available  = acrn_x2apic_available,
 };
+
+static int __init acrn_guest_init(void)
+{
+
+}
+early_initcall(acrn_guest_init);
