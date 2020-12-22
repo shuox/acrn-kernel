@@ -18,7 +18,22 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/ioctl.h>
-#include <linux/acrn.h>
+#include "acrn.h"
+
+/* PSR bits (CPSR, SPSR) */
+
+#define PSR_THUMB       (1<<5)        /* Thumb Mode enable */
+#define PSR_FIQ_MASK    (1<<6)        /* Fast Interrupt mask */
+#define PSR_IRQ_MASK    (1<<7)        /* Interrupt mask */
+#define PSR_ABT_MASK    (1<<8)        /* Asynchronous Abort mask */
+#define PSR_BIG_ENDIAN  (1<<9)        /* arm32: Big Endian Mode */
+#define PSR_DBG_MASK    (1<<9)        /* arm64: Debug Exception mask */
+#define PSR_IT_MASK     (0x0600fc00)  /* Thumb If-Then Mask */
+#define PSR_JAZELLE     (1<<24)       /* Jazelle Mode */
+
+#define PSR_MODE_EL1h 0x05
+
+#define PSR_GUEST64_INIT (PSR_ABT_MASK|PSR_FIQ_MASK|PSR_IRQ_MASK|PSR_MODE_EL1h)
 
 #define GUEST_MEMORY_SIZE	(1024*1024)
 void *guest_memory;
@@ -65,6 +80,7 @@ int main(int argc, char **argv)
 
 	memcpy(&create_vm.uuid, &vm_uuid, 16);
 	create_vm.ioreq_buf = (__u64)io_req_buf;
+	printf("io buf [%llx]\n", create_vm.ioreq_buf);
 	ret = ioctl(hsm_fd, ACRN_IOCTL_CREATE_VM, &create_vm);
 	printf("Created VM! [%d]\n", ret);
 	vcpu_num = create_vm.vcpu_num;
@@ -84,15 +100,9 @@ int main(int argc, char **argv)
 	/* setup vcpu registers */
 	memset(&regs, 0, sizeof(regs));
 	regs.vcpu_id = 0;
-	regs.vcpu_regs.rip = 0;
-
-	/* CR0_ET | CR0_NE */
-	regs.vcpu_regs.cr0 = 0x30U;
-	regs.vcpu_regs.cs_ar = 0x009FU;
-	regs.vcpu_regs.cs_sel = 0xF000U;
-	regs.vcpu_regs.cs_limit = 0xFFFFU;
-	regs.vcpu_regs.cs_base = 0 & 0xFFFF0000UL;
-	regs.vcpu_regs.rip = 0 & 0xFFFFUL;
+	regs.arm_regs.pc = 0;
+	regs.arm_regs.pstate = PSR_GUEST64_INIT;
+	regs.arm_regs.regs[0] = 0x5555;
 
 	ret = ioctl(hsm_fd, ACRN_IOCTL_SET_VCPU_REGS, &regs);
 	printf("Set up VM BSP registers! [%d]\n", ret);
@@ -107,22 +117,25 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, vm_exit);
 	while (is_running) {
-		ret = ioctl(hsm_fd, ACRN_IOCTL_ATTACH_IOREQ_CLIENT, 0);
+		//ret = ioctl(hsm_fd, ACRN_IOCTL_ATTACH_IOREQ_CLIENT, 0);
+		usleep(1000000);
+		printf("I am living..\n");
 
 		for (vcpu_id = 0; vcpu_id < vcpu_num; vcpu_id++) {
 			io_req = &io_req_buf[vcpu_id];
-			if ((__sync_add_and_fetch(&io_req->processed, 0) == ACRN_IOREQ_STATE_PROCESSING)
-					&& (!io_req->kernel_handled))
-				if (io_req->type == ACRN_IOREQ_TYPE_PORTIO) {
-					int bytes, port, in;
+			if ((__sync_add_and_fetch(&io_req->processed, 0) == ACRN_IOREQ_STATE_PENDING))
+				if (io_req->type == ACRN_IOREQ_TYPE_MMIO) {
+					int bytes, addr, in, val;
 
-					port = io_req->reqs.pio_request.address;
-					bytes = io_req->reqs.pio_request.size;
-					in = (io_req->reqs.pio_request.direction == ACRN_IOREQ_DIR_READ);
-					printf("Guest VM %s PIO[%x] with size[%x]\n", in ? "read" : "write", port, bytes);
+					addr = io_req->reqs.mmio_request.address;
+					bytes = io_req->reqs.mmio_request.size;
+					in = (io_req->reqs.mmio_request.direction == ACRN_IOREQ_DIR_READ);
+					val = io_req->reqs.mmio_request.value;
+					printf("Guest VM %s MMIO[%x] with size[%x], val[%x]\n", in ? "read" : "write", addr, bytes, val);
 
 					notify.vmid = vmid;
 					notify.vcpu = vcpu_id;
+					io_req->processed = ACRN_IOREQ_STATE_PROCESSING;
 					ioctl(hsm_fd, ACRN_IOCTL_NOTIFY_REQUEST_FINISH, &notify);
 				}
 		}

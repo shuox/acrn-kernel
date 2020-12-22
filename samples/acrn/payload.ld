@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+ENTRY(_Reset)
 SECTIONS
 {
-        .payload16 0 : {
-                guest16 = .;
-                guest16.o(.text)
-                guest16_end = .;
-        }
+        .startup . : { startup.o(.text) }
+        .text : { *(.text) }
+        .data : { *(.data) }
+        .bss : { *(.bss COMMON) }
+        . = ALIGN(8);
+        . = . + 0x1000; /* 4kB of stack memory */
+        stack_top = .;
 }
