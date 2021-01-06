@@ -346,6 +346,12 @@ struct acrn_pcidev {
 	__u32	bar[ACRN_PCI_NUM_BARS];
 };
 
+struct acrn_mmiodev {
+	uint64_t base_gpa;
+	uint64_t base_hpa;
+	uint64_t size;
+};
+
 /**
  * struct acrn_msi_entry - Info for injecting a MSI interrupt to a VM
  * @msi_addr:	MSI addr[19:12] with dest vCPU ID
@@ -477,6 +483,10 @@ struct acrn_irqfd {
 	_IOW(ACRN_IOCTL_TYPE, 0x55, struct acrn_pcidev)
 #define ACRN_IOCTL_DEASSIGN_PCIDEV	\
 	_IOW(ACRN_IOCTL_TYPE, 0x56, struct acrn_pcidev)
+#define ACRN_IOCTL_ASSIGN_MMIODEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x57, struct acrn_mmiodev)
+#define ACRN_IOCTL_DEASSIGN_MMIODEV	\
+	_IOW(ACRN_IOCTL_TYPE, 0x58, struct acrn_mmiodev)
 
 #define ACRN_IOCTL_PM_GET_CPU_STATE	\
 	_IOWR(ACRN_IOCTL_TYPE, 0x60, __u64)

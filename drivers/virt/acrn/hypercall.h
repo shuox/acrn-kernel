@@ -41,6 +41,8 @@
 #define HC_RESET_PTDEV_INTR		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x04)
 #define HC_ASSIGN_PCIDEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x05)
 #define HC_DEASSIGN_PCIDEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x06)
+#define HC_ASSIGN_MMIODEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x07)
+#define HC_DEASSIGN_MMIODEV		_HC_ID(HC_ID, HC_ID_PCI_BASE + 0x08)
 
 #define HC_ID_PM_BASE			0x80UL
 #define HC_PM_GET_CPU_STATE		_HC_ID(HC_ID, HC_ID_PM_BASE + 0x00)
@@ -216,6 +218,16 @@ static inline long hcall_assign_pcidev(u64 vmid, u64 addr)
 static inline long hcall_deassign_pcidev(u64 vmid, u64 addr)
 {
 	return acrn_hypercall2(HC_DEASSIGN_PCIDEV, vmid, addr);
+}
+
+static inline long hcall_assign_mmiodev(u64 vmid, u64 addr)
+{
+	return acrn_hypercall2(HC_ASSIGN_MMIODEV, vmid, addr);
+}
+
+static inline long hcall_deassign_mmiodev(u64 vmid, u64 addr)
+{
+	return acrn_hypercall2(HC_ASSIGN_MMIODEV, vmid, addr);
 }
 
 /**
