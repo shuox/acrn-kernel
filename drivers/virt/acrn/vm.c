@@ -80,9 +80,8 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 
 	ret = hcall_destroy_vm(vm->vmid);
 	if (ret < 0) {
-		dev_err(acrn_dev.this_device,
-			"Failed to destroy VM %u\n", vm->vmid);
-		clear_bit(ACRN_VM_FLAG_DESTROYED, &vm->flags);
+		dev_info(acrn_dev.this_device,
+			"Destroy VM %u with return %d\n", vm->vmid, ret);
 		return ret;
 	}
 
